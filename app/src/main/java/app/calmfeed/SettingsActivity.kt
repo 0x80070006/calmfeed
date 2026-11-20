@@ -1,100 +1,105 @@
 package app.calmfeed
 
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
-import android.util.TypedValue
-import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.widget.LinearLayout
-import android.widget.NumberPicker
-import android.widget.ScrollView
-import android.widget.Switch
-import android.widget.TextView
+import android.widget.FrameLayout
+import android.view.WindowInsetsController
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 
-/** Écran de réglages construit en code (aucune dépendance UI). */
+/**
+ * Écran de réglages : page locale (assets/settings.html) dans une WebView isolée.
+ * Aucune requête réseau ; la page parle à l'app via le pont CalmBridge.
+ */
 class SettingsActivity : Activity() {
 
     private lateinit var prefs: Prefs
+    private lateinit var web: WebView
+    private lateinit var root: FrameLayout
 
-    private fun dp(v: Int) = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
-    ).toInt()
-
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
 
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(16), dp(20), dp(24))
+        web = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.blockNetworkLoads = true
+            isVerticalScrollBarEnabled = false
+            webViewClient = object : WebViewClient() {
+                // La page ne navigue jamais ailleurs.
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
+            }
+            addJavascriptInterface(Bridge(), "CalmBridge")
         }
-
-        col.addView(TextView(this).apply {
-            text = "Réglages"
-            textSize = 24f
-            setPadding(0, 0, 0, dp(12))
-        })
-
-        section(col, "Feed")
-        col.addView(TextView(this).apply {
-            text = "Nombre maximum de publications par session"
-            setPadding(0, dp(8), 0, 0)
-        })
-        col.addView(NumberPicker(this).apply {
-            minValue = 3
-            maxValue = 60
-            value = prefs.maxPosts.coerceIn(3, 60)
-            wrapSelectorWheel = false
-            setOnValueChangedListener { _, _, v -> prefs.maxPosts = v }
-        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL })
-
-        toggle(col, "followingOnly", "Uniquement les comptes suivis", "Force l'onglet « Suivi(e) » (chronologique)")
-        toggle(col, "hideAds", "Masquer les publicités")
-        toggle(col, "hideSuggestions", "Masquer les suggestions", "Comptes et posts suggérés")
-        toggle(col, "noAutoplay", "Pas de lecture auto des vidéos")
-        toggle(col, "hideStories", "Masquer les stories")
-
-        section(col, "Reels & Explorer")
-        toggle(col, "hideReels", "Bloquer les Reels", "Onglet, flux /reels/ et reels dans le feed")
-        toggle(col, "allowSingleReel", "Autoriser un reel reçu en message", "Ouvre le reel seul, sans flux infini")
-        toggle(col, "hideExploreGrid", "Masquer la grille Explorer", "La recherche de personnes reste disponible")
-
-        section(col, "Démarrage")
-        toggle(col, "startOnInbox", "Ouvrir sur les messages")
-
-        col.addView(TextView(this).apply {
-            val min = prefs.usageTodayMs() / 60_000
-            text = "Temps passé aujourd'hui : $min min"
-            alpha = 0.7f
-            setPadding(0, dp(24), 0, 0)
-        })
-
-        setContentView(ScrollView(this).apply {
-            addView(col, MATCH_PARENT, WRAP_CONTENT)
+        // Conteneur qui reçoit les marges système (la WebView ne les applique pas elle-même).
+        val frame = FrameLayout(this).apply {
+            addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             setOnApplyWindowInsetsListener { v, insets ->
                 @Suppress("DEPRECATION")
                 v.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
                 insets
             }
-        })
+        }
+        root = frame
+        applyChrome()
+        setContentView(frame)
+        web.loadUrl("file:///android_asset/settings.html")
     }
 
-    private fun section(parent: LinearLayout, title: String) {
-        parent.addView(TextView(this).apply {
-            text = title.uppercase()
-            textSize = 12f
-            alpha = 0.6f
-            setPadding(0, dp(20), 0, dp(4))
-        })
+    private fun applyChrome() {
+        val c = Themes.chrome(this, prefs.theme())
+        web.setBackgroundColor(c.bg)
+        root.setBackgroundColor(c.bg)
+        window.decorView.setBackgroundColor(c.bg)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(if (c.dark) 0 else mask, mask)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (c.dark) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
     }
 
-    private fun toggle(parent: LinearLayout, key: String, title: String, subtitle: String? = null) {
-        parent.addView(Switch(this).apply {
-            text = if (subtitle != null) "$title\n$subtitle" else title
-            isChecked = prefs.flag(key)
-            setPadding(0, dp(10), 0, dp(10))
-            setOnCheckedChangeListener { _, v -> prefs.setFlag(key, v) }
-        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    override fun onDestroy() {
+        web.destroy()
+        super.onDestroy()
+    }
+
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    private inner class Bridge {
+        @JavascriptInterface
+        fun state(): String = prefs.stateJson()
+
+        @JavascriptInterface
+        fun set(key: String, value: String): Boolean {
+            val ok = prefs.set(key, value)
+            if (ok && (key == "bg" || key == "accent")) runOnUiThread { applyChrome() }
+            return ok
+        }
+
+        @JavascriptInterface
+        fun reset(): String {
+            prefs.reset()
+            runOnUiThread { applyChrome() }
+            return prefs.stateJson()
+        }
+
+        @JavascriptInterface
+        fun close() = runOnUiThread { finish() }
     }
 }

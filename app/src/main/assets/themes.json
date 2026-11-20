@@ -1,0 +1,37 @@
+{
+  "backgrounds": [
+    { "id": "system", "name": "Système", "desc": "Suit le mode clair/sombre du téléphone" },
+
+    { "id": "light", "name": "Clair", "dark": false,
+      "c": { "bg": "#ffffff", "bg2": "#f0f2f5", "elev": "#ffffff", "text": "#0c1014", "text2": "#5f6670", "text3": "#a3a8af", "sep": "#dbdfe4" } },
+
+    { "id": "dark", "name": "Sombre", "dark": true,
+      "c": { "bg": "#0e1014", "bg2": "#1c1f25", "elev": "#16191e", "text": "#f2f3f5", "text2": "#a3a9b1", "text3": "#6b7179", "sep": "#2a2e35" } },
+
+    { "id": "sauge", "name": "Sauge", "dark": false,
+      "c": { "bg": "#eef2ec", "bg2": "#e0e8dd", "elev": "#f6f8f4", "text": "#1f2a24", "text2": "#56655c", "text3": "#97a39b", "sep": "#d2dbce" } },
+
+    { "id": "sable", "name": "Sable", "dark": false,
+      "c": { "bg": "#f6f1e7", "bg2": "#ebe2d2", "elev": "#fbf8f2", "text": "#30271d", "text2": "#6f6253", "text3": "#ab9f90", "sep": "#e1d6c3" } },
+
+    { "id": "lavande", "name": "Lavande", "dark": false,
+      "c": { "bg": "#f2f0f8", "bg2": "#e5e1f0", "elev": "#f9f8fc", "text": "#27233a", "text2": "#5f5978", "text3": "#9f99b4", "sep": "#dad5e8" } },
+
+    { "id": "nuit", "name": "Nuit bleue", "dark": true,
+      "c": { "bg": "#141b26", "bg2": "#1f2835", "elev": "#19212d", "text": "#e3e9f1", "text2": "#9aa7b7", "text3": "#647083", "sep": "#2a3443" } },
+
+    { "id": "foret", "name": "Forêt", "dark": true,
+      "c": { "bg": "#141b17", "bg2": "#1e2822", "elev": "#19211c", "text": "#dfe8e1", "text2": "#94a79a", "text3": "#627369", "sep": "#28332c" } }
+  ],
+
+  "accents": [
+    { "id": "instagram", "name": "Bleu", "color": "#4a5df9" },
+    { "id": "vert", "name": "Vert", "color": "#3f9d6e" },
+    { "id": "turquoise", "name": "Turquoise", "color": "#1d97a3" },
+    { "id": "violet", "name": "Violet", "color": "#7c6cd6" },
+    { "id": "rose", "name": "Rose", "color": "#d6588a" },
+    { "id": "corail", "name": "Corail", "color": "#e0654f" },
+    { "id": "ambre", "name": "Ambre", "color": "#c98a2b" },
+    { "id": "graphite", "name": "Graphite", "color": "#6b7280" }
+  ]
+}

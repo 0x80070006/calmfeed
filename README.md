@@ -1,56 +1,94 @@
 # CalmFeed
 
-WebView Android qui affiche instagram.com en version « communication d'abord » :
-- Reels bloqués (onglet, flux `/reels/`, reels dans le feed) ; un reel reçu en DM reste visible seul (option).
-- Feed limité à N publications par session (15 par défaut), puis écran « Vous êtes à jour ».
-- Uniquement les comptes suivis, sans pubs ni suggestions.
-- Grille Explorer masquée, mais la recherche de personnes reste dispo.
-- Pas de lecture auto des vidéos.
-- Ouverture directe sur les messages.
-- Compteur « temps passé aujourd'hui ».
+**Une app Android pour garder Instagram pour ce qu'il a de mieux : parler à ses proches.**
+CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui sert à faire défiler sans fin : Reels, publicités, suggestions, fil infini.
 
-L'analyse de la page qui sert de base aux sélecteurs est dans [ANALYSE_INSTAGRAM_WEB.md](ANALYSE_INSTAGRAM_WEB.md).
+> ⚠️ Projet personnel non officiel, **sans lien avec Instagram ni Meta**. Il modifie uniquement l'affichage, sur votre téléphone. Modifier l'affichage d'un site reste contraire aux conditions d'utilisation d'Instagram, comme un bloqueur de pub. Utilisation à vos risques.
 
-## Principe anti-ban
-L'app **n'envoie aucune requête de plus** que le site officiel. Elle masque du contenu côté client et *retient* les requêtes de pagination du feed une fois la limite atteinte. Pas d'API privée, pas d'auto-scroll, pas d'auto-like. Le User-Agent est celui de Chrome Android ; seul le marqueur `; wv` de la WebView est retiré.
+<p>
+  <img src="docs/reglages-contenu.png" width="260" alt="Réglages, onglet Contenu">
+  <img src="docs/reglages-apparence.png" width="260" alt="Réglages, onglet Apparence">
+</p>
+
+## Ce que fait l'app
+
+**Fil d'actualité**
+- Nombre de publications par session au choix (5, 10, 15…). Ensuite, « Vous avez vu vos N publications » et le fil s'arrête : la page ne charge plus rien.
+- Uniquement les comptes suivis (chronologique), sans pubs ni publications suggérées. Les pubs ne comptent pas dans la limite.
+- Pas de lecture automatique des vidéos.
+
+**Reels et Explorer**
+- Reels bloqués : l'onglet, le flux et les reels dans le fil. Un reel reçu en message peut s'ouvrir seul (option).
+- La loupe affiche la grille par lots (10 par défaut), avec un bouton « Voir 10 de plus ».
+
+**Personnes**
+- Suggestions d'amis masquées partout.
+- Bouton **« Pas en retour »** sur votre profil : la liste des comptes que vous suivez et qui ne vous suivent pas, avec « Se désabonner ».
+
+**Interface**
+- Barres façon application : ＋, ♥ (avec sa pastille de notification) et ⚙ en haut ; onglet actif en évidence en bas.
+- Bulle « Votre story » en tête des stories.
+- Apparence : un fond (Système, Clair, Sombre, Sauge, Sable, Lavande, Nuit bleue, Forêt) et une couleur d'accent (8 choix). Les contrastes sont ajustés automatiquement pour rester lisibles.
+- Taille du texte réglable, compteur de temps passé dans la journée.
+
+## Discrétion vis-à-vis d'Instagram
+
+L'app est conçue pour ne pas ressembler à un robot :
+- Elle **n'envoie aucune requête de plus** que le site officiel. Elle masque du contenu et met en attente les requêtes « charger la suite » quand une limite est atteinte.
+- Pas d'API privée, pas de défilement automatique, pas de like ni de follow automatique.
+- User-Agent standard de Chrome Android.
+- « Pas en retour » ne se lance qu'à la demande. Il utilise les mêmes requêtes que la liste « Suivi(e)s » du site, une page de 12 comptes toutes les 2 à 3 secondes, et garde le résultat 24 h en cache. Les désabonnements sont espacés de 4 s minimum, 30 par heure au plus.
+
+## Installer
+
+1. Téléchargez `CalmFeed-x.y.z.apk` depuis la page [Releases](../../releases).
+2. Sur le téléphone, autorisez l'installation depuis cette source, puis ouvrez l'APK.
+3. Connectez-vous à Instagram dans l'app. La connexion reste sur votre téléphone : l'app ne la transmet nulle part.
+
+Android 8.0 ou plus récent.
+
+## Compiler soi-même
+
+Il faut le JDK fourni avec Android Studio et le SDK Android (compileSdk 36).
+
+```bash
+./gradlew assembleDebug
+```
+
+APK : `app/build/outputs/apk/debug/app-debug.apk`.
+
+Pour une build **release** signée, créez un fichier `keystore.properties` à la racine. Il est ignoré par Git : ne le publiez jamais.
+
+```
+storeFile=/chemin/vers/votre.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+puis :
+
+```bash
+./gradlew assembleRelease
+```
 
 ## Structure
+
 ```
 app/src/main/
-  assets/filter.js                 ← tout le filtrage (injecté avant le JS d'Instagram)
-  java/app/calmfeed/MainActivity.kt ← WebView, injection, fichiers, caméra/micro, liens externes
-  java/app/calmfeed/SettingsActivity.kt
-  java/app/calmfeed/Prefs.kt       ← réglages + temps d'utilisation
+  assets/js/core.js         noyau : ordonnanceur, navigation interne, file d'attente réseau
+  assets/js/theme.js        couleurs (variables CSS d'Instagram) + contrôle de contraste
+  assets/js/feed.js         fil : reels, pubs, suggestions, limite, « Suivi(e) », autoplay
+  assets/js/social.js       suggestions d'amis, bandeau « Utiliser l'application »
+  assets/js/explore.js      loupe par lots
+  assets/js/chrome.js       barres du haut / du bas, bulle « Votre story »
+  assets/js/nonfollowers.js « Pas en retour »
+  assets/js/boot.js         démarrage
+  assets/settings.html      écran de réglages (local, sans réseau)
+  assets/themes.json        fonds et couleurs d'accent
+  java/app/calmfeed/        MainActivity, SettingsActivity, Prefs, Themes
 ```
 
-## Compiler
-Il faut un JDK 17+ (celui d'Android Studio convient) et le SDK Android (compileSdk 36).
+Pour le débogage, la build debug permet d'inspecter la page via `chrome://inspect` ; tapez `window.__cfDebug` dans la console.
 
-```bash
-$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat assembleDebug
-```
-
-APK : `app/build/outputs/apk/debug/app-debug.apk`
-
-## Installer sur le téléphone
-Active le débogage USB, branche le téléphone, puis :
-
-```bash
-& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r app\build\outputs\apk\debug\app-debug.apk
-```
-
-## Déboguer les sélecteurs
-1. Lance l'app sur le téléphone branché en USB.
-2. Ouvre `chrome://inspect` dans Chrome sur le PC, puis **inspect** sous la WebView.
-3. Dans la console, tape `window.__cfDebug` : config, posts vus, éléments masqués (pub/reel/limite/suggestions) et nombre de requêtes de pagination retenues.
-4. Filtre la console sur `[CF]`.
-
-Si Instagram change son interface, il suffit en général d'ajuster `filter.js`. Les sélecteurs s'appuient sur `href`, `aria-label` et `role`, jamais sur les classes générées.
-
-## À vérifier au premier lancement
-- L'onglet « Suivi(e) » est-il bien forcé ? En mobile, l'app tente `/?variant=following` une fois par session.
-- Le libellé des pubs mobiles est-il bien détecté ? (`window.__cfDebug.hidden.ad`)
-- Le scroll s'arrête-t-il après N posts, sans requêtes en boucle ? (`blockedRequests` doit rester faible)
-
-## Avertissement
-Modifier l'affichage d'Instagram côté client reste contraire à ses conditions d'utilisation, comme un bloqueur de pub. Le risque est faible tant que le trafic reste normal, mais il n'est pas nul. Projet à usage personnel, non distribué.
+Si Instagram change son site, il suffit en général d'adapter un fichier JS. Les sélecteurs reposent sur les liens, les libellés d'accessibilité et les rôles, jamais sur les classes CSS générées. [ANALYSE_INSTAGRAM_WEB.md](ANALYSE_INSTAGRAM_WEB.md) détaille la structure du site.

@@ -5,9 +5,12 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.graphics.Color
+import android.content.res.ColorStateList
+import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.TypedValue
@@ -15,8 +18,9 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.WindowInsetsController
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -24,24 +28,25 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.LinearLayout
+import android.widget.FrameLayout
 import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import org.json.JSONObject
 
 class MainActivity : Activity() {
 
+    private lateinit var root: FrameLayout
     private lateinit var web: WebView
     private lateinit var progress: ProgressBar
-    private lateinit var usageLabel: TextView
     private lateinit var prefs: Prefs
 
     private var scriptHandler: ScriptHandler? = null
     private var docStartSupported = false
     private var installedConfig: String? = null
-    private var filterScript: String = ""
+    private var installedContent: String? = null
+    private var scriptBody: String = ""
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermission: PermissionRequest? = null
@@ -51,11 +56,16 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        filterScript = assets.open("filter.js").bufferedReader().use { it.readText() }
+        scriptBody = SCRIPTS.joinToString("\n;\n") { name ->
+            assets.open("js/$name").bufferedReader().use { it.readText() }
+        }
 
         setContentView(buildLayout())
+        applyChrome()
 
-        // ---- WebView ----
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            WebView.setWebContentsDebuggingEnabled(true)   // chrome://inspect, builds debug uniquement
+        }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(web, true)
@@ -63,19 +73,31 @@ class MainActivity : Activity() {
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = prefs.flag("noAutoplay")
+            mediaPlaybackRequiresUserGesture = prefs.bool("noAutoplay")
             setSupportMultipleWindows(false)
             loadWithOverviewMode = true
             useWideViewPort = true
+            textZoom = prefs.textZoom
+            // Fluidité : pré-rendu des zones hors écran (défilement sans tuiles blanches).
+            offscreenPreRaster = true
             // UA Chrome Android standard : on retire seulement les marqueurs WebView.
             userAgentString = WebSettings.getDefaultUserAgent(this@MainActivity)
                 .replace("; wv", "")
                 .replace(Regex("Version/\\S+ "), "")
         }
+        // Le moteur de rendu garde une priorité haute même brièvement en arrière-plan.
+        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
         web.webViewClient = Client()
         web.webChromeClient = Chrome()
+        web.addJavascriptInterface(AppBridge(), "CalmApp")
 
         installScript()
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+            ) { handleBack() }
+        }
 
         if (savedInstanceState != null) {
             web.restoreState(savedInstanceState)
@@ -84,45 +106,30 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun startUrl() =
-        if (prefs.flag("startOnInbox")) "$IG/direct/inbox/" else "$IG/"
+    private fun startUrl() = if (prefs.bool("startOnInbox")) "$IG/direct/inbox/" else "$IG/"
 
-    // ------------------------------------------------------------------ layout
+    // ------------------------------------------------------------------ interface native
 
     private fun dp(v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
     ).toInt()
 
+    /**
+     * Plus de barre native : la page occupe tout l'écran sous la barre d'état, et l'en-tête
+     * (＋, ♥, ⚙) est dessiné dans la page par chrome.js. Seule une fine ligne de chargement
+     * se superpose en haut.
+     */
     private fun buildLayout(): View {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        // Barre native fine : temps du jour + raccourcis
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(4), 0)
-        }
-        usageLabel = TextView(this).apply {
-            textSize = 13f
-            alpha = 0.7f
-        }
-        bar.addView(usageLabel, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        bar.addView(barButton("✉", "Messages") { web.loadUrl("$IG/direct/inbox/") })
-        bar.addView(barButton("⌂", "Accueil") { web.loadUrl("$IG/") })
-        bar.addView(barButton("⚙", "Réglages") {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        })
-        root.addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, dp(40)))
-
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = false
-            max = 100
-            visibility = View.GONE
-        }
-        root.addView(progress, LinearLayout.LayoutParams(MATCH_PARENT, dp(3)))
+        root = FrameLayout(this)
 
         web = WebView(this)
-        root.addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        root.addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            visibility = View.INVISIBLE
+        }
+        root.addView(progress, FrameLayout.LayoutParams(MATCH_PARENT, dp(2), Gravity.TOP))
 
         // Edge-to-edge (targetSdk 35+) : on applique les marges système nous-mêmes.
         root.setOnApplyWindowInsetsListener { v, insets ->
@@ -136,34 +143,54 @@ class MainActivity : Activity() {
         return root
     }
 
-    private fun barButton(label: String, desc: String, onClick: () -> Unit) =
-        TextView(this).apply {
-            text = label
-            contentDescription = desc
-            textSize = 20f
-            gravity = Gravity.CENTER
-            setPadding(dp(12), 0, dp(12), 0)
-            setBackgroundColor(Color.TRANSPARENT)
-            isClickable = true
-            setOnClickListener { onClick() }
-        }.also { it.layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT) }
+    private fun openSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java))
+        @Suppress("DEPRECATION")
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
 
-    // ------------------------------------------------------------------ injection
+    /**
+     * Pont appelé par le bouton ⚙ de l'en-tête dans la page. Une seule méthode, sans paramètre ni
+     * valeur de retour : la page ne peut rien faire d'autre qu'ouvrir l'écran de réglages.
+     */
+    private inner class AppBridge {
+        @JavascriptInterface
+        fun openSettings() = runOnUiThread { this@MainActivity.openSettings() }
+    }
 
-    /** Enregistre filter.js pour qu'il s'exécute avant le JS d'Instagram. */
-    private fun installScript() {
-        val config = prefs.toJsConfig()
-        installedConfig = config
-        docStartSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-        if (docStartSupported) {
-            scriptHandler?.remove()
-            scriptHandler = WebViewCompat.addDocumentStartJavaScript(
-                web, fullScript(config), setOf(IG)
-            )
+    /** Couleurs des barres système et du fond selon le thème choisi. */
+    private fun applyChrome() {
+        val c = Themes.chrome(this, prefs.theme())
+        root.setBackgroundColor(c.bg)
+        window.decorView.setBackgroundColor(c.bg)
+        progress.progressTintList = ColorStateList.valueOf(c.accent)
+        progress.progressBackgroundTintList = ColorStateList.valueOf(c.bg)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(if (c.dark) 0 else mask, mask)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                if (c.dark) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         }
     }
 
-    private fun fullScript(config: String) = "window.__CF=$config;\n$filterScript"
+    // ------------------------------------------------------------------ injection
+
+    /** Enregistre les scripts pour qu'ils s'exécutent avant le JS d'Instagram. */
+    private fun installScript() {
+        installedConfig = prefs.toJsConfig()
+        installedContent = prefs.contentJson().toString()
+        docStartSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        if (docStartSupported) {
+            scriptHandler?.remove()
+            scriptHandler = WebViewCompat.addDocumentStartJavaScript(web, fullScript(), setOf(IG))
+        }
+    }
+
+    private fun fullScript() = "window.__CF=$installedConfig;\n$scriptBody"
 
     // ------------------------------------------------------------------ cycle de vie
 
@@ -171,12 +198,22 @@ class MainActivity : Activity() {
         super.onResume()
         web.onResume()
         resumedAt = SystemClock.elapsedRealtime()
-        refreshUsage()
-        // Réglages modifiés : réinstaller le script et recharger.
+        applyChrome()
+        web.settings.textZoom = prefs.textZoom
+
         if (installedConfig != prefs.toJsConfig()) {
-            web.settings.mediaPlaybackRequiresUserGesture = prefs.flag("noAutoplay")
+            val contentChanged = installedContent != prefs.contentJson().toString()
+            web.settings.mediaPlaybackRequiresUserGesture = prefs.bool("noAutoplay")
             installScript()
-            web.reload()
+            if (contentChanged) {
+                web.reload()
+            } else {
+                // Seul le thème a changé : appliqué en direct, sans recharger (aucune requête).
+                val cfg = JSONObject(installedConfig!!)
+                web.evaluateJavascript(
+                    "window.__cf&&window.__cf.setTheme(${cfg.opt("palette")},${cfg.optBoolean("paletteDark")},${cfg.optBoolean("decoShapes")})", null
+                )
+            }
         }
     }
 
@@ -197,17 +234,24 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    private fun refreshUsage() {
-        val min = prefs.usageTodayMs() / 60_000
-        usageLabel.text = "Aujourd'hui : $min min"
+    /** Retour : 1) panneau CalmFeed ouvert 2) historique de la page 3) mise en arrière-plan. */
+    private fun handleBack() {
+        web.evaluateJavascript("!!(window.__cf&&window.__cf.back())") { handled ->
+            if (handled == "true") return@evaluateJavascript
+            if (web.canGoBack()) web.goBack() else moveTaskToBack(true)
+        }
     }
 
+    // Android < 13 : touche retour classique. Android 13+ : OnBackInvokedCallback (enregistré dans onCreate).
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && web.canGoBack()) {
-            web.goBack()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
+        if (keyCode != KeyEvent.KEYCODE_BACK || Build.VERSION.SDK_INT >= 33) return super.onKeyDown(keyCode, event)
+        handleBack()
+        return true
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.data?.takeIf { isAllowedHost(it) }?.let { web.loadUrl(it.toString()) }
     }
 
     // ------------------------------------------------------------------ navigation
@@ -222,34 +266,29 @@ class MainActivity : Activity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val uri = request.url
             if (uri.scheme == "http" || uri.scheme == "https") {
-                // Liens publicitaires : jamais ouverts.
-                if (uri.path?.startsWith("/ads/") == true) return true
+                if (uri.path?.startsWith("/ads/") == true) return true   // liens publicitaires : jamais ouverts
                 if (isAllowedHost(uri)) return false
             }
-            // Lien externe : navigateur du téléphone.
             try {
-                startActivity(Intent(Intent.ACTION_VIEW, uri))
+                startActivity(Intent(Intent.ACTION_VIEW, uri))         // lien externe : navigateur
             } catch (_: ActivityNotFoundException) { }
             return true
         }
 
-        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-            // Fallback si DOCUMENT_START_SCRIPT n'est pas dispo (WebView très ancienne).
-            if (!docStartSupported && url?.startsWith(IG) == true) {
-                view.evaluateJavascript(fullScript(installedConfig ?: prefs.toJsConfig()), null)
-            }
+        override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            // Fallback si DOCUMENT_START_SCRIPT n'est pas disponible (WebView très ancienne).
+            if (!docStartSupported && url?.startsWith(IG) == true) view.evaluateJavascript(fullScript(), null)
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             CookieManager.getInstance().flush()
-            refreshUsage()
         }
     }
 
     private inner class Chrome : WebChromeClient() {
         override fun onProgressChanged(view: WebView, newProgress: Int) {
             progress.progress = newProgress
-            progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.GONE
+            progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.INVISIBLE
         }
 
         override fun onShowFileChooser(
@@ -319,6 +358,7 @@ class MainActivity : Activity() {
 
     companion object {
         const val IG = "https://www.instagram.com"
+        private val SCRIPTS = listOf("core.js", "theme.js", "feed.js", "social.js", "explore.js", "chrome.js", "nonfollowers.js", "boot.js")
         private const val REQ_FILE = 41
         private const val REQ_PERM = 42
     }

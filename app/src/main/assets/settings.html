@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Réglages</title>
+<style>
+  :root{
+    --bg:#ffffff; --bg2:#f2f2f4; --card:#ffffff; --text:#0c1014; --text2:#6b7178; --sep:#e3e5e8;
+    --accent:#4a5df9; --accentText:#fff; --radius:16px;
+    color-scheme: light;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg2);color:var(--text);
+    font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  body{transition:background-color .25s ease,color .25s ease}
+  button{font:inherit;color:inherit}
+
+  header{position:sticky;top:0;z-index:5;background:var(--bg2);padding:6px 8px 10px}
+  .top{display:flex;align-items:center;gap:4px;height:48px}
+  .back{width:44px;height:44px;border:0;border-radius:50%;background:none;display:grid;place-items:center}
+  .back:active{background:var(--sep)}
+  h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+  .usage{margin:0 0 0 52px;color:var(--text2);font-size:13px}
+
+  .tabs{display:grid;grid-template-columns:1fr 1fr;margin:12px 8px 0;padding:3px;border-radius:12px;background:var(--sep);position:relative}
+  .tabs button{position:relative;z-index:1;height:34px;border:0;background:none;border-radius:9px;font-weight:600;font-size:14px;color:var(--text2);transition:color .2s}
+  .tabs button[aria-selected="true"]{color:var(--text)}
+  .tabs .pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:9px;background:var(--card);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+  .tabs[data-tab="look"] .pill{transform:translateX(100%)}
+
+  main{padding:4px 16px 40px}
+  section[hidden]{display:none}
+  h2{margin:22px 4px 8px;font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+  .card{background:var(--card);border-radius:var(--radius);overflow:hidden}
+  .row{display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:56px;position:relative}
+  .row + .row::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:1px solid var(--sep)}
+  .row .txt{flex:1;min-width:0}
+  .row .t{font-weight:500}
+  .row .d{font-size:13px;color:var(--text2);margin-top:1px}
+  .row.off{opacity:.45;pointer-events:none}
+  label.row{cursor:pointer}
+
+  /* interrupteur */
+  .sw{appearance:none;-webkit-appearance:none;flex:none;width:50px;height:30px;border-radius:15px;margin:0;
+    background:var(--sep);position:relative;transition:background .2s ease;outline:none}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+  .sw:checked{background:var(--accent)}
+  .sw:checked::after{transform:translateX(20px)}
+
+  /* curseur du nombre de posts */
+  .slider{padding:16px 16px 14px}
+  .slider .head{display:flex;justify-content:space-between;align-items:baseline}
+  .slider .val{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .slider .val small{font-size:14px;font-weight:500;color:var(--text2);margin-left:4px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:none;margin:8px 0 0}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+    background:linear-gradient(to right,var(--accent) var(--p,30%),var(--sep) var(--p,30%))}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;margin-top:-10px;
+    background:#fff;border:0;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .presets{display:flex;gap:8px;margin-top:10px}
+  .presets button{flex:1;height:32px;border:1px solid var(--sep);background:none;border-radius:9px;font-size:13px;font-weight:600;color:var(--text2)}
+  .presets button.on{border-color:var(--accent);color:var(--accent)}
+
+  .reset{display:block;margin:28px auto 0;border:0;background:none;color:var(--text2);font-size:14px;padding:10px 14px;border-radius:10px}
+  .reset.confirm{color:#d6455a;font-weight:600}
+
+  /* thèmes */
+  /* aperçu */
+  .preview{padding:14px 14px 16px;transition:background .25s}
+  .pv-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .pv-top span{display:flex;gap:12px}
+  .pv-stories{display:flex;gap:10px;margin-bottom:12px}
+  .pv-story{width:44px;height:44px;border-radius:50%;padding:2px;background:var(--pv-accent)}
+  .pv-story i{display:block;width:100%;height:100%;border-radius:50%;border:2px solid var(--pv-bg);background:var(--pv-bg2)}
+  .pv-post{border-radius:12px;height:82px;background:var(--pv-bg2);margin-bottom:10px}
+  .pv-lines span{display:block;height:7px;border-radius:4px;margin-bottom:6px}
+  .pv-btns{display:flex;gap:8px;margin-top:10px}
+  .pv-btns b{flex:1;height:30px;border-radius:9px;display:grid;place-items:center;font-size:13px;font-weight:600}
+
+  /* fonds */
+  .bgs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .bgc{border:0;background:none;padding:6px 0 2px;display:flex;flex-direction:column;align-items:center;gap:6px;border-radius:12px}
+  .bgc .swc{width:52px;height:52px;border-radius:50%;position:relative;transition:transform .15s}
+  .bgc:active .swc{transform:scale(.94)}
+  .bgc[aria-checked="true"] .swc{outline:2.5px solid var(--accent);outline-offset:3px}
+  .bgc .nm{font-size:12px;font-weight:500;color:var(--text2)}
+  .bgc[aria-checked="true"] .nm{color:var(--text);font-weight:600}
+
+  /* accents */
+  .accents{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 6px;padding:16px 10px}
+  .acc{border:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .acc .dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;transition:transform .15s}
+  .acc:active .dot{transform:scale(.92)}
+  .acc[aria-checked="true"] .dot{outline:2.5px solid currentColor;outline-offset:3px}
+  .acc .dot svg{opacity:0}
+  .acc[aria-checked="true"] .dot svg{opacity:1}
+  .acc .nm{font-size:12px;color:var(--text2)}
+
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px 16px 4px}
+  .seg button{height:36px;border:1px solid var(--sep);background:none;border-radius:10px;font-weight:600;font-size:13px;color:var(--text2)}
+  .seg button.on{border-color:var(--accent);color:var(--accent)}
+  .sample{padding:10px 16px 16px;color:var(--text2)}
+  .sample .bubble{display:inline-block;max-width:85%;padding:9px 13px;border-radius:18px;background:var(--bg2);color:var(--text);transition:font-size .15s}
+
+  .note{margin:20px 6px 0;font-size:12.5px;color:var(--text2);text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <button class="back" id="back" aria-label="Retour">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <h1>Réglages</h1>
+  </div>
+  <p class="usage" id="usage"></p>
+  <div class="tabs" role="tablist" id="tabs" data-tab="content">
+    <span class="pill"></span>
+    <button role="tab" aria-selected="true" data-tab="content">Contenu</button>
+    <button role="tab" aria-selected="false" data-tab="look">Apparence</button>
+  </div>
+</header>
+
+<main>
+  <!-- =============================== CONTENU =============================== -->
+  <section id="tab-content">
+    <h2>Fil d'actualité</h2>
+    <div class="card">
+      <div class="slider">
+        <div class="head">
+          <div><div class="t" style="font-weight:500">Publications par session</div>
+            <div class="d" style="font-size:13px;color:var(--text2)">Ensuite, le fil s'arrête et ne charge plus rien.</div></div>
+          <div class="val"><span id="mpv">15</span></div>
+        </div>
+        <input type="range" id="maxPosts" min="3" max="50" step="1" aria-label="Publications par session">
+        <div class="presets" id="presets">
+          <button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="25">25</button><button data-v="50">50</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px" id="feedToggles"></div>
+
+    <h2>Personnes</h2>
+    <div class="card" id="peopleToggles"></div>
+
+    <h2>Reels et Explorer</h2>
+    <div class="card" id="reelsToggles"></div>
+    <div class="card" style="margin-top:12px" id="exploreCard">
+      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Explorer : publications par lot</div>
+        <div class="d">Un bouton « Voir plus » affiche le lot suivant.</div></div></div>
+      <div class="seg" id="exploreBatch" style="padding-top:6px;padding-bottom:14px">
+        <button data-v="6">6</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
+      </div>
+    </div>
+
+    <h2>Divers</h2>
+    <div class="card" id="miscToggles"></div>
+
+    <button class="reset" id="reset">Rétablir les réglages par défaut</button>
+    <p class="note">Les changements de contenu sont appliqués en revenant à l'app (la page est rechargée une fois).</p>
+  </section>
+
+  <!-- =============================== APPARENCE =============================== -->
+  <section id="tab-look" hidden>
+    <h2>Aperçu</h2>
+    <div class="card preview" id="preview">
+      <div class="pv-top"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 20.3s-7.8-4.6-8.9-9.7C2.4 7.2 4.6 4.5 7.6 4.5c1.9 0 3.4 1 4.4 2.5 1-1.5 2.5-2.5 4.4-2.5 3 0 5.2 2.7 4.5 6.1-1.1 5.1-8.9 9.7-8.9 9.7z"/></svg></span></div>
+      <div class="pv-stories"><div class="pv-story"><i></i></div><div class="pv-story"><i></i></div><div class="pv-story"><i></i></div><div class="pv-story"><i></i></div></div>
+      <div class="pv-post"></div>
+      <div class="pv-lines"><span style="width:62%"></span><span style="width:38%"></span></div>
+      <div class="pv-btns"><b id="pvFollow">Suivre</b><b id="pvMsg">Message</b></div>
+    </div>
+
+    <h2>Fond</h2>
+    <div class="bgs" id="bgs" role="radiogroup" aria-label="Fond"></div>
+
+    <h2>Couleur d'accent</h2>
+    <div class="card"><div class="accents" id="accents" role="radiogroup" aria-label="Couleur d'accent"></div></div>
+    <div class="card" style="margin-top:12px" id="lookToggles"></div>
+
+    <h2>Taille du texte</h2>
+    <div class="card">
+      <div class="seg" id="zoom">
+        <button data-v="90">Petit</button><button data-v="100">Normal</button><button data-v="115">Grand</button><button data-v="130">Très grand</button>
+      </div>
+      <div class="sample"><span class="bubble" id="sample">On se retrouve à 19 h au café ?</span></div>
+    </div>
+    <p class="note">Les couleurs s'appliquent sans recharger Instagram. Les contrastes sont ajustés automatiquement pour rester lisibles.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const B = window.CalmBridge;
+  let S = JSON.parse(B.state());
+  const $ = (s) => document.querySelector(s);
+
+  const GROUPS = {
+    feedToggles: [
+      ['followingOnly', 'Uniquement les comptes suivis', 'Fil chronologique, sans « Pour vous »'],
+      ['hideAds', 'Masquer les publicités'],
+      ['hideSuggestedPosts', 'Masquer les publications suggérées'],
+      ['noAutoplay', 'Pas de lecture automatique', 'Les vidéos démarrent quand vous les touchez'],
+      ['hideStories', 'Masquer les stories'],
+    ],
+    peopleToggles: [
+      ['hideSuggestedAccounts', "Masquer les suggestions d'amis", '« Suggestions pour vous », « Découvrir des personnes »'],
+      ['nonFollowersButton', 'Bouton « Pas en retour » sur mon profil', 'Les comptes que vous suivez sans retour'],
+    ],
+    reelsToggles: [
+      ['hideReels', 'Bloquer les Reels', 'Onglet, flux et reels dans le fil'],
+      ['allowSingleReel', 'Ouvrir un reel reçu en message', 'Seul, sans enchaîner sur les suivants', 'hideReels'],
+      ['hideExploreGrid', 'Masquer toute la grille Explorer', 'Seule la recherche de personnes reste'],
+    ],
+    miscToggles: [
+      ['startOnInbox', 'Ouvrir sur les messages'],
+      ['hideAppBanner', "Masquer « Utiliser l'application »"],
+    ],
+    lookToggles: [
+      ['decoShapes', 'Formes décoratives', "Halos de la couleur d'accent derrière le contenu"],
+    ],
+  };
+  // ---------------------------------------------------------- couleurs (mêmes règles que theme.js)
+  const parse = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const hex = (a) => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+  const mix = (a, b, t) => { const x = parse(a), y = parse(b); return hex(x.map((v, i) => v + (y[i] - v) * t)); };
+  const lum = (h) => { const c = parse(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+  const readable = (fg, bg, target, toward) => { for (let i = 0; i <= 12; i++) { const c = mix(fg, toward, i / 12); if (contrast(c, bg) >= target) return c; } return toward; };
+  const best = (bg, cs) => cs.reduce((a, b) => contrast(b, bg) > contrast(a, bg) ? b : a);
+  const sysDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const BGS = S.themes.backgrounds, ACCS = S.themes.accents;
+  const bgById = (id) => BGS.find(b => b.id === id) || BGS[1];
+  /** Palette complète : fond (résolu si « Système ») + accent, contrastes vérifiés. */
+  const compose = (bgId, accId) => {
+    const dark = bgId === 'system' ? sysDark() : !!bgById(bgId).dark;
+    const b = bgById(bgId === 'system' ? (dark ? 'dark' : 'light') : bgId).c;
+    const accent = (ACCS.find(a => a.id === accId) || ACCS[0]).color;
+    const tint = mix(b.bg, accent, dark ? .22 : .16);
+    return Object.assign({}, b, {
+      dark, accent, tint,
+      onAccent: best(accent, ['#ffffff', b.text, b.bg]),
+      onTint: readable(mix(accent, dark ? '#ffffff' : '#000000', .28), tint, 4.5, b.text),
+      link: readable(accent, b.bg, 4.5, b.text),
+    });
+  };
+  const blobs = (p) => {
+    const a = p.dark ? [.24, .16, .18] : [.26, .18, .20];
+    const rgba = (h, x) => `rgba(${parse(h).join(',')},${x})`;
+    return `radial-gradient(60vmax 46vmax at 108% -6%, ${rgba(p.accent, a[0])}, transparent 62%),` +
+      `radial-gradient(48vmax 40vmax at -14% 46%, ${rgba(p.link, a[1])}, transparent 64%),` +
+      `radial-gradient(56vmax 44vmax at 96% 108%, ${rgba(p.accent, a[2])}, transparent 62%)`;
+  };
+
+  const paint = () => {
+    const p = compose(S.cfg.bg, S.cfg.accent);
+    const r = document.documentElement.style;
+    r.setProperty('--bg2', p.dark ? p.bg : p.bg2);
+    r.setProperty('--card', p.dark ? p.elev : (p.elev || p.bg));
+    r.setProperty('--bg', p.bg);
+    r.setProperty('--text', p.text);
+    r.setProperty('--text2', p.text2);
+    r.setProperty('--sep', p.sep);
+    r.setProperty('--accent', p.link);
+    r.setProperty('--accentText', p.onAccent);
+    r.setProperty('color-scheme', p.dark ? 'dark' : 'light');
+    document.body.style.backgroundImage = S.cfg.decoShapes ? blobs(p) : 'none';
+    document.body.style.backgroundAttachment = 'fixed';
+    // aperçu
+    const pv = $('#preview');
+    pv.style.background = p.bg;
+    pv.style.color = p.text;
+    pv.style.setProperty('--pv-accent', `linear-gradient(135deg, ${p.accent}, ${p.link})`);
+    pv.style.setProperty('--pv-bg', p.bg);
+    pv.style.setProperty('--pv-bg2', p.bg2);
+    pv.querySelector('.pv-post').style.background = S.cfg.decoShapes ? `${blobs(p).replace(/vmax/g, '%')}, ${p.bg2}` : p.bg2;
+    const ls = pv.querySelectorAll('.pv-lines span');
+    ls[0].style.background = p.text; ls[1].style.background = p.text2;
+    Object.assign($('#pvFollow').style, { background: p.accent, color: p.onAccent });
+    Object.assign($('#pvMsg').style, { background: p.tint, color: p.onTint });
+  };
+
+  const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const buildLook = () => {
+    $('#bgs').innerHTML = BGS.map(b => {
+      const sw = b.id === 'system'
+        ? 'background:linear-gradient(135deg,#ffffff 50%,#0e1014 50%);box-shadow:inset 0 0 0 1px rgba(127,127,127,.35)'
+        : `background:linear-gradient(${b.c.bg} 62%, ${b.c.bg2} 62%);box-shadow:inset 0 0 0 1px rgba(127,127,127,.35)`;
+      return `<button class="bgc" role="radio" data-id="${b.id}" aria-label="${b.name}"><span class="swc" style="${sw}"></span><span class="nm">${b.name}</span></button>`;
+    }).join('');
+    $('#accents').innerHTML = ACCS.map(a =>
+      `<button class="acc" role="radio" data-id="${a.id}" aria-label="${a.name}" style="color:${a.color}"><span class="dot" style="background:${a.color}">${CHECK}</span><span class="nm">${a.name}</span></button>`).join('');
+    $('#bgs').addEventListener('click', (e) => {
+      const b = e.target.closest('.bgc'); if (!b) return;
+      S.cfg.bg = b.dataset.id; B.set('bg', b.dataset.id); syncLook(); paint();
+    });
+    $('#accents').addEventListener('click', (e) => {
+      const b = e.target.closest('.acc'); if (!b) return;
+      S.cfg.accent = b.dataset.id; B.set('accent', b.dataset.id); syncLook(); paint();
+    });
+  };
+  const syncLook = () => {
+    document.querySelectorAll('.bgc').forEach(b => b.setAttribute('aria-checked', String(b.dataset.id === S.cfg.bg)));
+    document.querySelectorAll('.acc').forEach(b => b.setAttribute('aria-checked', String(b.dataset.id === S.cfg.accent)));
+  };
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => paint());
+
+  // ---------------------------------------------------------- interrupteurs
+  const rows = {};
+  const buildToggles = () => {
+    for (const [box, items] of Object.entries(GROUPS)) {
+      const el = document.getElementById(box);
+      el.innerHTML = items.map(([k, t, d]) => `
+        <label class="row" data-k="${k}">
+          <div class="txt"><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div>
+          <input type="checkbox" class="sw" role="switch" data-k="${k}">
+        </label>`).join('');
+      for (const [k, , , dep] of items) rows[k] = { el: el.querySelector(`.row[data-k="${k}"]`), dep };
+    }
+    document.addEventListener('change', (e) => {
+      const k = e.target.dataset && e.target.dataset.k;
+      if (!k || e.target.type !== 'checkbox') return;
+      S.cfg[k] = e.target.checked;
+      B.set(k, String(e.target.checked));
+      syncDeps();
+      if (k === 'decoShapes') paint();
+    });
+  };
+  const syncDeps = () => {
+    for (const [k, r] of Object.entries(rows)) if (r.dep) r.el.classList.toggle('off', !S.cfg[r.dep]);
+    $('#exploreCard').classList.toggle('off', !!S.cfg.hideExploreGrid);
+    $('#exploreCard').style.opacity = S.cfg.hideExploreGrid ? .45 : '';
+    $('#exploreCard').style.pointerEvents = S.cfg.hideExploreGrid ? 'none' : '';
+  };
+  const syncBatch = () => document.querySelectorAll('#exploreBatch button')
+    .forEach(b => b.classList.toggle('on', +b.dataset.v === +S.cfg.exploreBatch));
+  $('#exploreBatch').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    S.cfg.exploreBatch = +b.dataset.v;
+    B.set('exploreBatch', b.dataset.v);
+    syncBatch();
+  });
+  const syncToggles = () => {
+    document.querySelectorAll('input.sw').forEach(i => { i.checked = !!S.cfg[i.dataset.k]; });
+    syncDeps();
+  };
+
+  // ---------------------------------------------------------- nombre de posts
+  const range = $('#maxPosts');
+  const showMax = (v) => {
+    $('#mpv').textContent = v;
+    range.style.setProperty('--p', ((v - 3) / 47 * 100) + '%');
+    document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', +b.dataset.v === +v));
+  };
+  let saveT;
+  const setMax = (v) => {
+    S.cfg.maxPosts = +v;
+    range.value = v;
+    showMax(v);
+    clearTimeout(saveT);
+    saveT = setTimeout(() => B.set('maxPosts', String(v)), 150);
+  };
+  range.addEventListener('input', () => setMax(range.value));
+  $('#presets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMax(b.dataset.v); });
+
+  // ---------------------------------------------------------- taille du texte
+  const syncZoom = () => {
+    document.querySelectorAll('#zoom button').forEach(b => b.classList.toggle('on', +b.dataset.v === +S.cfg.textZoom));
+    $('#sample').style.fontSize = (15 * S.cfg.textZoom / 100) + 'px';
+  };
+  $('#zoom').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    S.cfg.textZoom = +b.dataset.v;
+    B.set('textZoom', b.dataset.v);
+    syncZoom();
+  });
+
+  // ---------------------------------------------------------- onglets, retour, reset
+  const tabs = $('#tabs');
+  tabs.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-tab]');
+    if (!b) return;
+    tabs.dataset.tab = b.dataset.tab;
+    tabs.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    $('#tab-content').hidden = b.dataset.tab !== 'content';
+    $('#tab-look').hidden = b.dataset.tab !== 'look';
+    scrollTo(0, 0);
+  });
+  $('#back').addEventListener('click', () => B.close());
+
+  const reset = $('#reset');
+  let resetT;
+  reset.addEventListener('click', () => {
+    if (!reset.classList.contains('confirm')) {
+      reset.classList.add('confirm');
+      reset.textContent = 'Toucher à nouveau pour confirmer';
+      resetT = setTimeout(() => { reset.classList.remove('confirm'); reset.textContent = 'Rétablir les réglages par défaut'; }, 3000);
+      return;
+    }
+    clearTimeout(resetT);
+    S = JSON.parse(B.reset());
+    reset.classList.remove('confirm');
+    reset.textContent = 'Réglages rétablis';
+    syncAll();
+  });
+
+  const syncAll = () => {
+    syncToggles();
+    syncBatch();
+    range.value = S.cfg.maxPosts;
+    showMax(S.cfg.maxPosts);
+    syncLook();
+    syncZoom();
+    paint();
+  };
+
+  const m = S.usageMin;
+  $('#usage').textContent = m < 1 ? "Aujourd'hui : moins d'une minute sur Instagram" : `Aujourd'hui : ${m} min sur Instagram`;
+  buildToggles();
+  buildLook();
+  syncAll();
+})();
+</script>
+</body>
+</html>

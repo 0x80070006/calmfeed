@@ -6,3 +6,8 @@ local.properties
 .idea/
 *.iml
 captures/
+
+# Signature release (jamais dans le dépôt)
+keystore.properties
+*.jks
+*.keystore
