@@ -150,13 +150,6 @@
         </div>
       </div>
     </div>
-    <div class="card" style="margin-top:12px">
-      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Publications par compte</div>
-        <div class="d">Plus de variété : un compte très actif ne remplit plus tout le fil.</div></div></div>
-      <div class="seg" id="maxPerAuthor" style="padding-top:6px;padding-bottom:14px">
-        <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="0">Illimité</button>
-      </div>
-    </div>
     <div class="card" style="margin-top:12px" id="feedToggles"></div>
 
     <h2>Personnes</h2>
@@ -250,8 +243,7 @@
 
   const GROUPS = {
     feedToggles: [
-      ['followingOnly', 'Uniquement les comptes suivis', 'Fil chronologique, sans « Pour vous »'],
-      ['hideSeenPosts', 'Ne pas remontrer ce que j’ai déjà vu', 'Chaque actualisation ne montre que des publications inédites'],
+      ['followingOnly', 'Uniquement les comptes suivis', 'Fil chronologique des abonnements (désactivé : fil « Pour vous » d’Instagram, plus varié)'],
       ['hideAds', 'Masquer les publicités'],
       ['hideSuggestedPosts', 'Masquer les publications suggérées'],
       ['noAutoplay', 'Pas de lecture automatique', 'Les vidéos démarrent quand vous les touchez'],
@@ -262,7 +254,8 @@
       ['nonFollowersButton', 'Bouton « Pas en retour » sur mon profil', 'Les comptes que vous suivez sans retour'],
     ],
     reelsToggles: [
-      ['hideReels', 'Bloquer les Reels', 'Désactivé : un onglet Reels apparaît, limité au nombre choisi'],
+      ['hideFeedReels', 'Masquer les reels du fil', 'Les reels de l’Accueil sont recouverts, le fil ne bouge pas'],
+      ['hideReels', 'Masquer l’onglet Reels', 'Désactivé : un onglet Reels apparaît, limité au nombre choisi'],
       ['allowSingleReel', 'Ouvrir un reel reçu en message', 'Seul, sans enchaîner sur les suivants', 'hideReels'],
       ['hideExploreGrid', 'Masquer toute la grille Explorer', 'Seule la recherche de personnes reste'],
     ],
@@ -410,10 +403,8 @@
     syncSeg(id, key);
     after && after();
   });
-  bindSeg('maxPerAuthor', 'maxPerAuthor');
   bindSeg('notifInterval', 'notifInterval');
   const syncNotif = () => {
-    syncSeg('maxPerAuthor', 'maxPerAuthor');
     syncSeg('notifInterval', 'notifInterval');
     const off = !S.cfg.notifEnabled;
     document.querySelectorAll('#notifInterval, #notifTest').forEach(el => { el.style.opacity = off ? .45 : ''; el.style.pointerEvents = off ? 'none' : ''; });

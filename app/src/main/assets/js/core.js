@@ -10,7 +10,7 @@
 
   const C = Object.assign({
     maxPosts: 15,
-    hideReels: true, allowSingleReel: true, hideExploreGrid: true,
+    hideReels: true, hideFeedReels: true, allowSingleReel: true, hideExploreGrid: true,
     hideAds: true, hideSuggestedPosts: true, hideSuggestedAccounts: true,
     hideStories: false, followingOnly: true, noAutoplay: true,
     hideAppBanner: true, nonFollowersButton: true,

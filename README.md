@@ -14,13 +14,11 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 
 **Fil d'actualité**
 - Nombre de publications par session au choix (5, 10, 15…). Ensuite, « Vous avez vu vos N publications » et le fil s'arrête : la page ne charge plus rien.
-- Uniquement les comptes suivis (chronologique), sans pubs ni publications suggérées. Les pubs ne comptent pas dans la limite.
-- Variété : au plus 1 publication par compte et par session (réglable), pour que les comptes très actifs ne remplissent plus tout le fil.
-- Chaque actualisation ne montre que des publications inédites : celles déjà vues à l'écran sont sautées (mémoire de 7 jours sur le téléphone, désactivable).
+- Le fil d'Instagram tel quel (« Pour vous » par défaut, ou abonnements uniquement en option) : CalmFeed ne retire aucun post, il recouvre les reels et les pubs dans leur emplacement, donc le défilement reste celui d'Instagram.
 - Pas de lecture automatique des vidéos.
 
 **Reels et Explorer**
-- Reels bloqués par défaut : l'onglet, le flux et les reels dans le fil. Un reel reçu en message peut s'ouvrir seul (option).
+- Deux réglages séparés : masquer les reels du fil, masquer l'onglet Reels. Un reel reçu en message peut s'ouvrir seul (option).
 - La loupe affiche la grille par lots (10 par défaut), avec un bouton « Voir 10 de plus ».
 
 **Personnes**

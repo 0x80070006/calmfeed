@@ -46,7 +46,6 @@ class Prefs(private val context: Context) {
         put("maxPosts", maxPosts)
         put("exploreBatch", int("exploreBatch"))
         put("reelsMax", int("reelsMax"))
-        put("maxPerAuthor", int("maxPerAuthor"))
         for (k in JS_BOOLS) put(k, bool(k))
     }
 
@@ -99,8 +98,7 @@ class Prefs(private val context: Context) {
 
     companion object {
         val BOOLS = linkedMapOf(
-            "followingOnly" to true,
-            "hideSeenPosts" to true,
+            "followingOnly" to false,
             "hideAds" to true,
             "hideSuggestedPosts" to true,
             "noAutoplay" to true,
@@ -108,6 +106,7 @@ class Prefs(private val context: Context) {
             "hideSuggestedAccounts" to true,
             "nonFollowersButton" to true,
             "hideReels" to true,
+            "hideFeedReels" to true,
             "allowSingleReel" to true,
             "hideExploreGrid" to false,
             "hideAppBanner" to true,
@@ -125,7 +124,6 @@ class Prefs(private val context: Context) {
             "maxPosts" to IntRange(15, 3, 50),
             "exploreBatch" to IntRange(10, 3, 30),
             "reelsMax" to IntRange(10, 3, 50),
-            "maxPerAuthor" to IntRange(1, 0, 5),          // 0 = illimité
             "notifInterval" to IntRange(1, 0, 120),       // 1 = instantané (temps réel) ; 15/30/60 = contrôles ; 0 = app ouverte seulement
             "textZoom" to IntRange(100, 85, 130),
         )
