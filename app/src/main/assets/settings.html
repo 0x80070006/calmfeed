@@ -23,12 +23,20 @@
   h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
   .usage{margin:0 0 0 52px;color:var(--text2);font-size:13px}
 
-  .tabs{display:grid;grid-template-columns:1fr 1fr;margin:12px 8px 0;padding:3px;border-radius:12px;background:var(--sep);position:relative}
+  .tabs{display:grid;grid-template-columns:1fr 1fr 1fr;margin:12px 8px 0;padding:3px;border-radius:12px;background:var(--sep);position:relative}
   .tabs button{position:relative;z-index:1;height:34px;border:0;background:none;border-radius:9px;font-weight:600;font-size:14px;color:var(--text2);transition:color .2s}
   .tabs button[aria-selected="true"]{color:var(--text)}
-  .tabs .pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:9px;background:var(--card);
+  .tabs .pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(33.333% - 2px);border-radius:9px;background:var(--card);
     box-shadow:0 1px 3px rgba(0,0,0,.08);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
   .tabs[data-tab="look"] .pill{transform:translateX(100%)}
+  .tabs[data-tab="notif"] .pill{transform:translateX(200%)}
+  .warn{margin:0 0 12px;padding:12px 14px;border-radius:12px;font-size:13.5px;line-height:1.45;
+    background:color-mix(in srgb, #e0654f 16%, var(--card));color:var(--text)}
+  .warn button{margin-top:8px;border:0;border-radius:9px;height:32px;padding:0 12px;font-weight:600;font-size:13px;
+    background:var(--accent);color:var(--accentText)}
+  .act{display:block;width:100%;height:46px;margin-top:10px;border:0;border-radius:12px;font-weight:600;font-size:14.5px;
+    background:var(--card);color:var(--text)}
+  .act:active{opacity:.7}
 
   main{padding:4px 16px 40px}
   section[hidden]{display:none}
@@ -121,6 +129,7 @@
     <span class="pill"></span>
     <button role="tab" aria-selected="true" data-tab="content">Contenu</button>
     <button role="tab" aria-selected="false" data-tab="look">Apparence</button>
+    <button role="tab" aria-selected="false" data-tab="notif">Notifications</button>
   </div>
 </header>
 
@@ -139,6 +148,13 @@
         <div class="presets" id="presets">
           <button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="25">25</button><button data-v="50">50</button>
         </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Publications par compte</div>
+        <div class="d">Plus de variété : un compte très actif ne remplit plus tout le fil.</div></div></div>
+      <div class="seg" id="maxPerAuthor" style="padding-top:6px;padding-bottom:14px">
+        <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="0">Illimité</button>
       </div>
     </div>
     <div class="card" style="margin-top:12px" id="feedToggles"></div>
@@ -168,6 +184,32 @@
 
     <button class="reset" id="reset">Rétablir les réglages par défaut</button>
     <p class="note">Les changements de contenu sont appliqués en revenant à l'app (la page est rechargée une fois).</p>
+  </section>
+
+  <!-- =============================== NOTIFICATIONS =============================== -->
+  <section id="tab-notif" hidden>
+    <h2>Messages privés</h2>
+    <div class="warn" id="notifWarn" hidden>Android bloque les notifications de CalmFeed.
+      <br><button id="notifAllow">Autoriser</button></div>
+    <div class="card" id="notifMain"></div>
+
+    <h2>Contenu de la notification</h2>
+    <div class="card" id="notifContent"></div>
+
+    <h2>Quand l'app est fermée</h2>
+    <div class="card">
+      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Vérifier les messages</div>
+        <div class="d">Un coup d'œil discret à la liste des messages, à intervalle légèrement variable.
+          App ouverte ou en arrière-plan : instantané, sans requête en plus.</div></div></div>
+      <div class="seg" id="notifInterval" style="padding-top:6px;padding-bottom:14px">
+        <button data-v="0">Jamais</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">1 h</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px" id="notifQuietBox"></div>
+
+    <button class="act" id="notifTest">Envoyer une notification d'essai</button>
+    <button class="act" id="notifSystem">Son et vibration (réglages Android)</button>
+    <p class="note">La réponse rapide passe par l'interface d'Instagram, comme si vous écriviez dans l'app.</p>
   </section>
 
   <!-- =============================== APPARENCE =============================== -->
@@ -227,6 +269,17 @@
     miscToggles: [
       ['startOnInbox', 'Ouvrir sur les messages'],
       ['hideAppBanner', "Masquer « Utiliser l'application »"],
+    ],
+    notifMain: [
+      ['notifEnabled', 'Notifications de messages', 'Nom, photo et début du message de l’expéditeur'],
+    ],
+    notifContent: [
+      ['notifPreview', 'Afficher le début du message', 'Sinon : « Nouveau message »', 'notifEnabled'],
+      ['notifPhoto', 'Afficher la photo de l’expéditeur', null, 'notifEnabled'],
+      ['notifReply', 'Réponse rapide', 'Répondre depuis la notification quand il n’y en a qu’une', 'notifEnabled'],
+    ],
+    notifQuietBox: [
+      ['notifQuiet', 'Heures calmes (23 h – 8 h)', 'Ni vérification ni notification la nuit', 'notifEnabled'],
     ],
     lookToggles: [
       ['decoShapes', 'Formes décoratives', "Halos de la couleur d'accent derrière le contenu"],
@@ -338,6 +391,7 @@
       syncDeps();
       if (k === 'decoShapes') paint();
       if (k === 'hideReels') syncBatch();
+      if (k === 'notifEnabled') syncNotif();
     });
   };
   const syncDeps = () => {
@@ -346,6 +400,30 @@
     $('#exploreCard').style.opacity = S.cfg.hideExploreGrid ? .45 : '';
     $('#exploreCard').style.pointerEvents = S.cfg.hideExploreGrid ? 'none' : '';
   };
+  const syncSeg = (id, key) => document.querySelectorAll('#' + id + ' button')
+    .forEach(b => b.classList.toggle('on', +b.dataset.v === +S.cfg[key]));
+  const bindSeg = (id, key, after) => $('#' + id).addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    S.cfg[key] = +b.dataset.v;
+    B.set(key, b.dataset.v);
+    syncSeg(id, key);
+    after && after();
+  });
+  bindSeg('maxPerAuthor', 'maxPerAuthor');
+  bindSeg('notifInterval', 'notifInterval');
+  const syncNotif = () => {
+    syncSeg('maxPerAuthor', 'maxPerAuthor');
+    syncSeg('notifInterval', 'notifInterval');
+    const off = !S.cfg.notifEnabled;
+    document.querySelectorAll('#notifInterval, #notifTest').forEach(el => { el.style.opacity = off ? .45 : ''; el.style.pointerEvents = off ? 'none' : ''; });
+    $('#notifWarn').hidden = off || (B.notifAllowed ? B.notifAllowed() : true);
+  };
+  window.onNotifPermission = syncNotif;
+  $('#notifAllow').addEventListener('click', () => B.askNotif());
+  $('#notifTest').addEventListener('click', () => B.testNotif());
+  $('#notifSystem').addEventListener('click', () => B.openNotifSystem());
+
   const syncBatch = () => {
     document.querySelectorAll('#exploreBatch button').forEach(b => b.classList.toggle('on', +b.dataset.v === +S.cfg.exploreBatch));
     document.querySelectorAll('#reelsMax button').forEach(b => b.classList.toggle('on', +b.dataset.v === +S.cfg.reelsMax));
@@ -412,6 +490,8 @@
     tabs.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
     $('#tab-content').hidden = b.dataset.tab !== 'content';
     $('#tab-look').hidden = b.dataset.tab !== 'look';
+    $('#tab-notif').hidden = b.dataset.tab !== 'notif';
+    if (b.dataset.tab === 'notif') syncNotif();
     scrollTo(0, 0);
   });
   $('#back').addEventListener('click', () => B.close());
@@ -434,6 +514,7 @@
 
   const syncAll = () => {
     syncToggles();
+    syncNotif();
     syncBatch();
     range.value = S.cfg.maxPosts;
     showMax(S.cfg.maxPosts);

@@ -15,6 +15,7 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 **Fil d'actualité**
 - Nombre de publications par session au choix (5, 10, 15…). Ensuite, « Vous avez vu vos N publications » et le fil s'arrête : la page ne charge plus rien.
 - Uniquement les comptes suivis (chronologique), sans pubs ni publications suggérées. Les pubs ne comptent pas dans la limite.
+- Variété : au plus 1 publication par compte et par session (réglable), pour que les comptes très actifs ne remplissent plus tout le fil.
 - Chaque actualisation ne montre que des publications inédites : celles déjà vues à l'écran sont sautées (mémoire de 7 jours sur le téléphone, désactivable).
 - Pas de lecture automatique des vidéos.
 
@@ -28,8 +29,15 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 
 **Application**
 - Une WebView par onglet (Accueil, Recherche, Reels, Messages, Profil) sous une barre d'onglets native. Changer d'onglet est instantané : la page reste chargée, à la même position.
-- Retour ou glissement depuis le bord : retour à l'Accueil. Sur l'Accueil, « Glissez à nouveau pour quitter ».
+- Retour ou glissement depuis le bord : page précédente de l'onglet (ex. conversation → liste des messages), puis Accueil, puis « Glissez à nouveau pour quitter ».
+- Écran de chargement aux couleurs du thème le temps qu'un onglet se construise : pas de flash ni de mise en page qui saute.
 - Tirer vers le bas en haut du fil pour charger les dernières publications (au plus toutes les 20 s).
+
+**Notifications de messages privés**
+- Nom et photo de l'expéditeur, début du message, bouton « Répondre » quand il n'y a qu'une notification. La réponse passe par l'interface d'Instagram, en arrière-plan.
+- App ouverte ou en arrière-plan : messages reçus en temps réel par la page, sans requête supplémentaire.
+- App fermée : coup d'œil discret à la liste des messages toutes les 15/30/60 min (avec un délai aléatoire), jamais la nuit (heures calmes 23 h – 8 h).
+- Onglet de réglages dédié : aperçu, photo, réponse rapide, fréquence, heures calmes, notification d'essai.
 
 **Gestes**
 - Double-tap sur une publication ou un reel : j'aime. Double-tap sur un message privé : ❤️.
@@ -98,12 +106,14 @@ app/src/main/
   assets/js/explore.js      loupe par lots
   assets/js/reels.js        page Reels : plein écran, interrupteur, limite
   assets/js/gestures.js     double-tap, appui long, réactions
+  assets/js/notify.js       lecture des messages non lus, ouvrir / répondre
   assets/js/chrome.js       barres du haut / du bas, bulle « Votre story »
   assets/js/nonfollowers.js « Pas en retour »
   assets/js/boot.js         démarrage
   assets/settings.html      écran de réglages (local, sans réseau)
   assets/themes.json        fonds et couleurs d'accent
-  java/app/calmfeed/        MainActivity (onglets natifs), SettingsActivity, Prefs, Themes
+  java/app/calmfeed/        MainActivity (onglets natifs), SettingsActivity, Prefs, Themes,
+                            Notifier, ReplyReceiver, InboxWorker, ScriptLib
 ```
 
 Pour le débogage, la build debug permet d'inspecter la page via `chrome://inspect` ; tapez `window.__cfDebug` dans la console.

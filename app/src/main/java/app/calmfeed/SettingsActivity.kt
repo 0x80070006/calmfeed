@@ -70,6 +70,25 @@ class SettingsActivity : Activity() {
         }
     }
 
+    private fun askNotifPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
+        } else if (!Notifier.canPost(this)) {
+            startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+        }
+    }
+
+    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
+        web.evaluateJavascript("window.onNotifPermission&&window.onNotifPermission()", null)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::web.isInitialized) web.evaluateJavascript("window.onNotifPermission&&window.onNotifPermission()", null)
+    }
+
     override fun onDestroy() {
         web.destroy()
         super.onDestroy()
@@ -89,7 +108,33 @@ class SettingsActivity : Activity() {
         fun set(key: String, value: String): Boolean {
             val ok = prefs.set(key, value)
             if (ok && (key == "bg" || key == "accent")) runOnUiThread { applyChrome() }
+            if (ok && key.startsWith("notif")) {
+                InboxWorker.schedule(applicationContext)
+                if (key == "notifEnabled" && value == "true") runOnUiThread { askNotifPermission() }
+            }
             return ok
+        }
+
+        /** Notifications autorisées par Android ? (sinon l'écran affiche un avertissement) */
+        @JavascriptInterface
+        fun notifAllowed(): Boolean = Notifier.canPost(applicationContext)
+
+        @JavascriptInterface
+        fun askNotif() = runOnUiThread { askNotifPermission() }
+
+        @JavascriptInterface
+        fun testNotif() {
+            if (!Notifier.canPost(applicationContext)) { runOnUiThread { askNotifPermission() }; return }
+            Notifier.showTest(applicationContext)
+        }
+
+        /** Son, vibration, écran verrouillé : réglages Android du canal « Messages privés ». */
+        @JavascriptInterface
+        fun openNotifSystem() = runOnUiThread {
+            Notifier.ensureChannel(this@SettingsActivity)
+            startActivity(android.content.Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, Notifier.CHANNEL))
         }
 
         @JavascriptInterface

@@ -122,6 +122,16 @@
   }, { threshold: [0.6] }) : null;
   NS.dbg.skippedOld = 0;
 
+  // Auteur d'une publication : premier lien de profil (/pseudo/) de l'en-tête du post.
+  const perAuthor = new Map();
+  const authorOf = (art) => {
+    for (const a of art.getElementsByTagName('a')) {
+      const h = a.getAttribute('href') || '';
+      if (/^\/[A-Za-z0-9._]+\/$/.test(h) && !/^\/(explore|reels|direct|accounts|p)\/$/.test(h)) return h;
+    }
+    return null;
+  };
+
   // Pagination du fil uniquement, reconnue par le NOM de la requête ou le chemin REST.
   const FEED_PAGINATION = /feed.*(pagination|timeline)|timeline.*(feed|pagination)/i;
   NS.blockers.push((name, path) =>
@@ -186,6 +196,13 @@
         if (viewedBefore.has(d.key) && !seen.has(d.key)) {          // déjà vu lors d'une visite précédente
           d.kind = 'old'; NS.hide(art, 'old'); NS.dbg.skippedOld++; continue;
         }
+        // Variété : au plus N publications du même compte par session (les comptes très actifs
+        // ne remplissent plus tout le fil). Les suivantes de ce compte sont sautées, sans compter.
+        if (C.maxPerAuthor > 0 && !seen.has(d.key)) {
+          const who = authorOf(art);
+          if (who && (perAuthor.get(who) || 0) >= C.maxPerAuthor) { d.kind = 'dup'; NS.hide(art, 'dup'); continue; }
+          d.author = who;
+        }
         if (!seen.has(d.key)) {
           if (limitReached) { NS.hide(art, 'limit'); continue; }
           // Pas encore compté : on laisse à une pub éventuelle le temps de se déclarer.
@@ -195,8 +212,11 @@
       }
       if (d.kind !== 'ok') { NS.hide(art, d.kind); continue; }
       if (!seen.has(d.key)) {
-        if (seen.size < C.maxPosts) { seen.set(d.key, seen.size); NS.dbg.seen.push(d.key); }
-        else NS.hide(art, 'limit');
+        if (seen.size < C.maxPosts) {
+          seen.set(d.key, seen.size);
+          NS.dbg.seen.push(d.key);
+          if (d.author) perAuthor.set(d.author, (perAuthor.get(d.author) || 0) + 1);
+        } else NS.hide(art, 'limit');
       }
       if (viewObs && !art.__cfObs && !art.hasAttribute('data-cf-hidden')) { art.__cfObs = true; viewObs.observe(art); }
       limitReached = seen.size >= C.maxPosts;
@@ -212,7 +232,7 @@
    */
   let nudges = 0, lastNudge = 0;
   const nudge = (main) => {
-    if (limitReached || nudges >= 6 || Date.now() - lastNudge < 1500) return;
+    if (limitReached || nudges >= 8 || Date.now() - lastNudge < 1500) return;
     if (!main.querySelector('[role="progressbar"]')) return;
     let visible = 0;
     for (const a of main.getElementsByTagName('article')) if (!a.hasAttribute('data-cf-hidden')) visible++;
@@ -233,7 +253,7 @@
 
     // Rien d'inédit après les relances : on le dit plutôt que de laisser tourner le chargement.
     let nothingNew = false;
-    if (!limitReached && seen.size === 0 && nudges >= 6 && Date.now() - lastNudge > 2500) {
+    if (!limitReached && seen.size === 0 && nudges >= 8 && Date.now() - lastNudge > 2500) {
       nothingNew = [...arts].every(a => a.hasAttribute('data-cf-hidden'));
     }
     if (!limitReached && !nothingNew) return;

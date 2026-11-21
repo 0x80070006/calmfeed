@@ -46,6 +46,7 @@ class Prefs(private val context: Context) {
         put("maxPosts", maxPosts)
         put("exploreBatch", int("exploreBatch"))
         put("reelsMax", int("reelsMax"))
+        put("maxPerAuthor", int("maxPerAuthor"))
         for (k in JS_BOOLS) put(k, bool(k))
     }
 
@@ -70,6 +71,18 @@ class Prefs(private val context: Context) {
         put("themes", Themes.raw(context))
         put("usageMin", usageTodayMs() / 60_000)
     }.toString()
+
+    // ---- dernière utilisation au premier plan (le contrôle en arrière-plan s'efface alors) ----
+    var lastForeground: Long
+        get() = sp.getLong("lastForeground", 0)
+        set(v) = sp.edit().putLong("lastForeground", v).apply()
+
+    /** Heures calmes : 23 h – 8 h. */
+    fun quietNow(): Boolean {
+        if (!bool("notifQuiet")) return false
+        val h = java.time.LocalTime.now().hour
+        return h >= 23 || h < 8
+    }
 
     // ---- temps d'utilisation ----
     fun addUsage(ms: Long) {
@@ -100,13 +113,20 @@ class Prefs(private val context: Context) {
             "hideAppBanner" to true,
             "startOnInbox" to true,
             "decoShapes" to true,
+            "notifEnabled" to true,
+            "notifPreview" to true,
+            "notifPhoto" to true,
+            "notifReply" to true,
+            "notifQuiet" to true,
         )
         /** Clés de contenu lues par le script injecté (startOnInbox est natif, decoShapes relève de l'apparence). */
-        val JS_BOOLS = BOOLS.keys.filter { it != "startOnInbox" && it != "decoShapes" }
+        val JS_BOOLS = BOOLS.keys.filter { it != "startOnInbox" && it != "decoShapes" && !it.startsWith("notif") }
         val INTS = mapOf(
             "maxPosts" to IntRange(15, 3, 50),
             "exploreBatch" to IntRange(10, 3, 30),
             "reelsMax" to IntRange(10, 3, 50),
+            "maxPerAuthor" to IntRange(1, 0, 5),          // 0 = illimité
+            "notifInterval" to IntRange(30, 0, 120),      // minutes ; 0 = seulement app ouverte
             "textZoom" to IntRange(100, 85, 130),
         )
     }

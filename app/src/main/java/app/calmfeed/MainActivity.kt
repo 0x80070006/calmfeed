@@ -69,6 +69,10 @@ class MainActivity : Activity() {
 
     private val webs = LinkedHashMap<String, WebView>()
     private val holders = HashMap<String, View>()
+    private val overlays = HashMap<String, View>()
+    private val refreshers = HashMap<String, SwipeRefreshLayout>()
+    private val pendingOnReady = HashMap<String, MutableList<() -> Unit>>()
+    private val readyTabs = HashSet<String>()
     private val handlers = HashMap<String, ScriptHandler>()
     private val barItems = LinkedHashMap<String, BarItem>()
     private var current = "home"
@@ -119,9 +123,9 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        scriptBody = SCRIPTS.joinToString("\n;\n") { name ->
-            assets.open("js/$name").bufferedReader().use { it.readText() }
-        }
+        scriptBody = ScriptLib.body(this)
+        live = java.lang.ref.WeakReference(this)
+        Notifier.ensureChannel(this)
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
             WebView.setWebContentsDebuggingEnabled(true)   // chrome://inspect, builds debug uniquement
         }
@@ -146,8 +150,20 @@ class MainActivity : Activity() {
         // fournit le pseudo, la photo de profil et la pastille Messages à la barre native.
         if (webs["home"] == null) {
             createWeb("home").loadUrl(urlFor("home")!!)
-            holders["home"]?.visibility = View.GONE
+            holders["home"]?.visibility = View.INVISIBLE
         }
+        // Messages chargé lui aussi en arrière-plan quand les notifications sont actives :
+        // il reçoit les messages en temps réel, sans aucune requête supplémentaire.
+        if (prefs.bool("notifEnabled") && webs["direct"] == null) {
+            createWeb("direct").loadUrl(urlFor("direct")!!)
+            holders["direct"]?.visibility = View.INVISIBLE
+        }
+        handleNotificationIntent(intent)
+        if (prefs.bool("notifEnabled") && Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
+        }
+        InboxWorker.schedule(this)
     }
 
     // ------------------------------------------------------------------ interface native
@@ -256,7 +272,7 @@ class MainActivity : Activity() {
         progress.progressBackgroundTintList = ColorStateList.valueOf(c.bg)
         toastView.background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(c.text) }
         toastView.setTextColor(c.bg)
-        for (h in holders.values) if (h is SwipeRefreshLayout) {
+        for (h in refreshers.values) {
             h.setColorSchemeColors(c.accent)
             h.setProgressBackgroundColorSchemeColor(blend(c.bg, c.text, 0.08f))
         }
@@ -316,9 +332,7 @@ class MainActivity : Activity() {
             useWideViewPort = true
             textZoom = prefs.textZoom
             offscreenPreRaster = true
-            userAgentString = WebSettings.getDefaultUserAgent(this@MainActivity)
-                .replace("; wv", "")
-                .replace(Regex("Version/\\S+ "), "")
+            userAgentString = ScriptLib.userAgent(this@MainActivity)
         }
         web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
         web.webViewClient = Client(tab)
@@ -327,18 +341,64 @@ class MainActivity : Activity() {
         installScript(tab, web)
         webs[tab] = web
 
-        val holder: View = if (tab == "home") {
+        val c = Themes.chrome(this, prefs.theme())
+        web.setBackgroundColor(c.bg)                       // jamais de flash blanc au chargement
+        val inner: View = if (tab == "home") {
             SwipeRefreshLayout(this).apply {
                 addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 }
                 setOnRefreshListener { onPullRefresh(this, web) }
-                val c = Themes.chrome(this@MainActivity, prefs.theme())
                 setColorSchemeColors(c.accent)
+                refreshers[tab] = this
             }
         } else web
-        holders[tab] = holder
-        stack.addView(holder, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        val frame = FrameLayout(this)
+        frame.addView(inner, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        frame.addView(buildOverlay(tab), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        holders[tab] = frame
+        stack.addView(frame, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         return web
+    }
+
+    /**
+     * Écran de chargement natif (couleur du thème + petit indicateur) posé sur la WebView jusqu'à ce que
+     * la page signale qu'elle est prête : on ne voit ni l'écran d'accueil d'Instagram ni la mise en page
+     * qui se construit. Retiré au plus tard après 10 s.
+     */
+    private fun buildOverlay(tab: String): View {
+        val c = Themes.chrome(this, prefs.theme())
+        val o = FrameLayout(this).apply {
+            setBackgroundColor(c.bg)
+            isClickable = true
+            addView(ProgressBar(this@MainActivity).apply {
+                isIndeterminate = true
+                indeterminateTintList = ColorStateList.valueOf(c.accent)
+            }, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
+        }
+        overlays[tab] = o
+        readyTabs.remove(tab)
+        main.postDelayed({ onTabReady(tab) }, 10_000)
+        return o
+    }
+
+    private fun showOverlay(tab: String) {
+        val o = overlays[tab] ?: return
+        readyTabs.remove(tab)
+        o.animate().cancel()
+        o.alpha = 1f
+        o.visibility = View.VISIBLE
+        main.postDelayed({ onTabReady(tab) }, 10_000)
+    }
+
+    private fun onTabReady(tab: String) {
+        if (!readyTabs.add(tab)) return
+        overlays[tab]?.animate()?.alpha(0f)?.setDuration(180)?.withEndAction { overlays[tab]?.visibility = View.GONE }?.start()
+        pendingOnReady.remove(tab)?.forEach { it() }
+    }
+
+    /** Exécute une action quand l'onglet est prêt (tout de suite s'il l'est déjà). */
+    private fun whenReady(tab: String, action: () -> Unit) {
+        if (tab in readyTabs) action() else pendingOnReady.getOrPut(tab) { mutableListOf() }.add(action)
     }
 
     /** Tirer vers le bas en haut du fil : recharge les dernières publications (au plus toutes les 20 s). */
@@ -360,8 +420,7 @@ class MainActivity : Activity() {
         docStartSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
     }
 
-    private fun scriptFor(tab: String) =
-        "window.__CF=Object.assign($installedConfig,{tab:'$tab'});\n$scriptBody"
+    private fun scriptFor(tab: String) = ScriptLib.script(this, installedConfig!!, tab)
 
     private fun installScript(tab: String, web: WebView) {
         if (!docStartSupported) return
@@ -393,8 +452,9 @@ class MainActivity : Activity() {
         web.onResume()
         current = tab
         if (prev != tab) {
-            holders[prev]?.visibility = View.GONE
-            webs[prev]?.onPause()          // onglet masqué : vidéos et animations en pause
+            // INVISIBLE et non GONE : la page garde sa taille réelle (sinon Instagram ne met rien en page).
+            holders[prev]?.visibility = View.INVISIBLE
+            if (prev != "direct") webs[prev]?.onPause()   // vidéos en pause ; Messages reste à l'écoute
         }
         progress.visibility = View.INVISIBLE
         styleBar()
@@ -445,6 +505,23 @@ class MainActivity : Activity() {
         fun toast(msg: String) = runOnUiThread { showToast(msg.take(80)) }
 
         @JavascriptInterface
+        fun ready() = runOnUiThread { onTabReady(tab) }
+
+        /** Liste des conversations non lues (onglet Messages). */
+        @JavascriptInterface
+        fun dmUnread(json: String) {
+            val watching = isResumed && current == "direct" &&
+                (webs["direct"]?.url ?: "").contains("/direct/inbox")
+            Notifier.onInbox(applicationContext, Notifier.parse(json), silent = watching)
+        }
+
+        @JavascriptInterface
+        fun dmSent(name: String, ok: Boolean) = runOnUiThread {
+            val pending = replies.remove(name) ?: return@runOnUiThread
+            Notifier.onReplied(applicationContext, name, pending.second, pending.first, ok)
+        }
+
+        @JavascriptInterface
         fun haptic() = runOnUiThread { root.performHapticFeedback(HapticFeedbackConstants.CONFIRM) }
 
         /** ＋ depuis un autre onglet (Reels) : ouvre le menu de création d'Instagram dans l'Accueil. */
@@ -457,9 +534,14 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------------ cycle de vie
 
+    private var isResumed = false
+
     override fun onResume() {
         super.onResume()
+        isResumed = true
+        prefs.lastForeground = System.currentTimeMillis()
         webs[current]?.onResume()
+        InboxWorker.schedule(this)
         resumedAt = SystemClock.elapsedRealtime()
 
         // Onglet Reels activé/désactivé dans les réglages : la barre change.
@@ -479,8 +561,9 @@ class MainActivity : Activity() {
             for ((tab, web) in webs) {
                 web.settings.textZoom = prefs.textZoom
                 web.settings.mediaPlaybackRequiresUserGesture = prefs.bool("noAutoplay") && tab != "reels"
+                web.setBackgroundColor(Themes.chrome(this, prefs.theme()).bg)
                 installScript(tab, web)
-                if (contentChanged) web.reload()
+                if (contentChanged) { showOverlay(tab); web.reload() }
                 else {
                     val cfg = JSONObject(installedConfig!!)
                     web.evaluateJavascript("window.__cf&&window.__cf.setTheme(${cfg.opt("palette")}," +
@@ -491,6 +574,8 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        isResumed = false
+        prefs.lastForeground = System.currentTimeMillis()
         prefs.addUsage(SystemClock.elapsedRealtime() - resumedAt)
         CookieManager.getInstance().flush()
         webs[current]?.onPause()
@@ -498,6 +583,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (live?.get() === this) live = null
         for (w in webs.values) w.destroy()
         super.onDestroy()
     }
@@ -512,11 +598,60 @@ class MainActivity : Activity() {
         val web = webs[current] ?: return finish()
         web.evaluateJavascript("!!(window.__cf&&window.__cf.back())") { handled ->
             if (handled == "true") return@evaluateJavascript
+            // 1) page précédente dans l'onglet, jusqu'à sa page racine (ex. conversation → liste)
+            if (!isTabRoot(current, web.url) && web.canGoBack()) { web.goBack(); return@evaluateJavascript }
+            // 2) racine d'un autre onglet → Accueil
             if (current != "home") { switchTo("home"); return@evaluateJavascript }
-            if (web.canGoBack()) { web.goBack(); return@evaluateJavascript }
+            // 3) racine de l'Accueil → « Glissez à nouveau pour quitter »
             val now = SystemClock.elapsedRealtime()
             if (now - lastExitAttempt < 2200) finish()
             else { lastExitAttempt = now; showToast("Glissez à nouveau pour quitter") }
+        }
+    }
+
+    /** Page racine d'un onglet (là où le retour quitte l'onglet au lieu de remonter l'historique). */
+    private fun isTabRoot(tab: String, url: String?): Boolean {
+        val path = url?.let { Uri.parse(it).path } ?: return true
+        return when (tab) {
+            "home" -> path == "/" || path.isEmpty()
+            "explore" -> path == "/explore/" || path == "/explore"
+            "reels" -> path.startsWith("/reels")
+            "direct" -> path == "/direct/inbox/" || path == "/direct/inbox" || path == "/direct/"
+            "profile" -> username != null && (path == "/$username/" || path == "/$username")
+            else -> true
+        }
+    }
+
+    // ------------------------------------------------------------------ notifications
+
+    /** Réponses envoyées depuis une notification, en attente de confirmation : nom → (texte, photo). */
+    private val replies = HashMap<String, Pair<String, String>>()
+
+    /** Envoie une réponse via l'onglet Messages, sans l'afficher. Faux si l'onglet n'existe pas. */
+    fun sendDm(name: String, text: String, avatar: String): Boolean {
+        if (webs["direct"] == null) return false
+        runOnUiThread {
+            replies[name] = text to avatar
+            whenReady("direct") {
+                webs["direct"]?.evaluateJavascript(
+                    "window.__cf&&window.__cf.sendTo(${JSONObject.quote(name)},${JSONObject.quote(text)})", null)
+            }
+        }
+        return true
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val name = intent?.getStringExtra(Notifier.EXTRA_OPEN) ?: return
+        val text = intent.getStringExtra(Notifier.EXTRA_TEXT)
+        intent.removeExtra(Notifier.EXTRA_OPEN)
+        if (webs["direct"] == null) createWeb("direct").loadUrl(urlFor("direct")!!)
+        if (text != null) {
+            sendDm(name, text, intent.getStringExtra("dm_avatar") ?: "")
+            return                                   // réponse : envoyée en arrière-plan
+        }
+        switchTo("direct")
+        whenReady("direct") {
+            webs["direct"]?.evaluateJavascript("window.__cf&&window.__cf.openThread(${JSONObject.quote(name)})", null)
         }
     }
 
@@ -529,6 +664,7 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.data?.takeIf { isAllowedHost(it) }?.let { openDeepLink(it) }
+        handleNotificationIntent(intent)
     }
 
     // ------------------------------------------------------------------ navigation
@@ -556,7 +692,7 @@ class MainActivity : Activity() {
 
         override fun onPageFinished(view: WebView, url: String?) {
             CookieManager.getInstance().flush()
-            (holders[tab] as? SwipeRefreshLayout)?.isRefreshing = false
+            refreshers[tab]?.isRefreshing = false
         }
     }
 
@@ -565,7 +701,7 @@ class MainActivity : Activity() {
             if (tab != current) return
             progress.progress = newProgress
             progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.INVISIBLE
-            if (newProgress == 100) (holders[tab] as? SwipeRefreshLayout)?.isRefreshing = false
+            if (newProgress == 100) refreshers[tab]?.isRefreshing = false
         }
 
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
@@ -620,12 +756,11 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        const val IG = "https://www.instagram.com"
-        private val SCRIPTS = listOf(
-            "core.js", "theme.js", "feed.js", "social.js", "explore.js", "reels.js",
-            "gestures.js", "chrome.js", "nonfollowers.js", "boot.js",
-        )
+        const val IG = ScriptLib.IG
+        /** Instance vivante (pour répondre depuis une notification sans ouvrir l'app). */
+        @Volatile var live: java.lang.ref.WeakReference<MainActivity>? = null
         private const val REQ_FILE = 41
         private const val REQ_PERM = 42
+        private const val REQ_NOTIF = 43
     }
 }
