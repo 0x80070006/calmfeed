@@ -10,7 +10,7 @@ object ScriptLib {
 
     private val FILES = listOf(
         "core.js", "theme.js", "feed.js", "social.js", "explore.js", "reels.js",
-        "gestures.js", "notify.js", "chrome.js", "nonfollowers.js", "boot.js",
+        "gestures.js", "stories.js", "notify.js", "chrome.js", "nonfollowers.js", "boot.js",
     )
     private var body: String? = null
 

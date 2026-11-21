@@ -164,6 +164,7 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
         }
         InboxWorker.schedule(this)
+        DmService.sync(this)
     }
 
     // ------------------------------------------------------------------ interface native
@@ -411,6 +412,8 @@ class MainActivity : Activity() {
             return
         }
         lastRefresh = now
+        layout.isRefreshing = false
+        showOverlay("home")
         web.loadUrl(urlFor("home")!!)
     }
 
@@ -507,6 +510,13 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun ready() = runOnUiThread { onTabReady(tab) }
 
+        /** Flèche « retour » d'Instagram : même comportement que le retour système. */
+        @JavascriptInterface
+        fun back() = runOnUiThread {
+            if (tab == current) handleBack()
+            else webs[tab]?.let { if (it.canGoBack()) it.goBack() }
+        }
+
         /** Liste des conversations non lues (onglet Messages). */
         @JavascriptInterface
         fun dmUnread(json: String) {
@@ -573,6 +583,40 @@ class MainActivity : Activity() {
         } else for (web in webs.values) web.settings.textZoom = prefs.textZoom
     }
 
+    /**
+     * Batterie : en arrière-plan, tout est en pause sauf l'onglet Messages (connexion temps réel).
+     * Au bout de 10 min, seuls les onglets indispensables restent en mémoire (Messages si les
+     * notifications instantanées sont actives) ; les autres se rechargeront au retour.
+     */
+    private val trim = Runnable {
+        val keep = if (DmService.wanted(this)) setOf("direct") else emptySet()
+        for (tab in webs.keys.toList()) if (tab !in keep) destroyTab(tab)
+    }
+
+    private fun destroyTab(tab: String) {
+        handlers.remove(tab)
+        overlays.remove(tab); refreshers.remove(tab); readyTabs.remove(tab); pendingOnReady.remove(tab)
+        holders.remove(tab)?.let { stack.removeView(it) }
+        webs.remove(tab)?.destroy()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        main.removeCallbacks(trim)
+        if (webs[current] == null) switchTo(current)          // onglet libéré pendant l'absence : rechargé
+        if (webs["home"] == null && current != "home") {
+            createWeb("home").loadUrl(urlFor("home")!!)
+            holders["home"]?.visibility = View.INVISIBLE
+        }
+    }
+
+    override fun onStop() {
+        for ((tab, w) in webs) if (tab != "direct") w.onPause()
+        main.postDelayed(trim, 10 * 60_000)
+        DmService.sync(this)
+        super.onStop()
+    }
+
     override fun onPause() {
         isResumed = false
         prefs.lastForeground = System.currentTimeMillis()
@@ -626,6 +670,9 @@ class MainActivity : Activity() {
 
     /** Réponses envoyées depuis une notification, en attente de confirmation : nom → (texte, photo). */
     private val replies = HashMap<String, Pair<String, String>>()
+
+    /** L'onglet Messages existe : il porte la connexion temps réel (le service n'en ouvre pas d'autre). */
+    fun hasDirectTab(): Boolean = webs["direct"] != null
 
     /** Envoie une réponse via l'onglet Messages, sans l'afficher. Faux si l'onglet n'existe pas. */
     fun sendDm(name: String, text: String, avatar: String): Boolean {

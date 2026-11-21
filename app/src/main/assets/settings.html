@@ -196,13 +196,13 @@
     <h2>Contenu de la notification</h2>
     <div class="card" id="notifContent"></div>
 
-    <h2>Quand l'app est fermée</h2>
+    <h2>En arrière-plan</h2>
     <div class="card">
-      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Vérifier les messages</div>
-        <div class="d">Un coup d'œil discret à la liste des messages, à intervalle légèrement variable.
-          App ouverte ou en arrière-plan : instantané, sans requête en plus.</div></div></div>
+      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Recevoir les messages</div>
+        <div class="d"><b>Instantané</b> : la connexion temps réel d'Instagram reste ouverte, sans aucune requête répétée
+          (une petite notification « Messages connectés » le signale). <b>15 / 30 min</b> : coup d'œil périodique, plus économe.</div></div></div>
       <div class="seg" id="notifInterval" style="padding-top:6px;padding-bottom:14px">
-        <button data-v="0">Jamais</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">1 h</button>
+        <button data-v="1">Instantané</button><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="0">Jamais</button>
       </div>
     </div>
     <div class="card" style="margin-top:12px" id="notifQuietBox"></div>

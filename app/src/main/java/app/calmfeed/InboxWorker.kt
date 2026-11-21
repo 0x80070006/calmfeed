@@ -64,6 +64,11 @@ class InboxWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(web, ScriptLib.script(ctx, prefs.toJsConfig(), "direct"), setOf(ScriptLib.IG))
         }
+        val dm = ctx.resources.displayMetrics      // taille réelle : la liste doit être mise en page pour être lue
+        web.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(dm.widthPixels, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(dm.heightPixels, android.view.View.MeasureSpec.EXACTLY))
+        web.layout(0, 0, dm.widthPixels, dm.heightPixels)
         web.loadUrl("${ScriptLib.IG}/direct/inbox/")
         return web
     }
@@ -91,7 +96,8 @@ class InboxWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
             val prefs = Prefs(ctx)
             val wm = WorkManager.getInstance(ctx)
             val minutes = prefs.int("notifInterval")
-            if (!prefs.bool("notifEnabled") || minutes == 0) { wm.cancelUniqueWork(NAME); return }
+            // 0 = jamais ; 1 = instantané (DmService, pas de contrôles périodiques).
+            if (!prefs.bool("notifEnabled") || minutes <= 1) { wm.cancelUniqueWork(NAME); return }
             val jitter = 1.0 + Random.nextDouble(-0.2, 0.2)
             val req = OneTimeWorkRequestBuilder<InboxWorker>()
                 .setInitialDelay((minutes * 60 * jitter).toLong(), TimeUnit.SECONDS)

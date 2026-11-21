@@ -35,8 +35,9 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 
 **Notifications de messages privés**
 - Nom et photo de l'expéditeur, début du message, bouton « Répondre » quand il n'y a qu'une notification. La réponse passe par l'interface d'Instagram, en arrière-plan.
-- App ouverte ou en arrière-plan : messages reçus en temps réel par la page, sans requête supplémentaire.
-- App fermée : coup d'œil discret à la liste des messages toutes les 15/30/60 min (avec un délai aléatoire), jamais la nuit (heures calmes 23 h – 8 h).
+- Seuls les nouveaux messages privés notifient (pas les notes, pas les conversations déjà non lues).
+- Mode Instantané (par défaut) : la connexion temps réel d'Instagram reste ouverte en arrière-plan, sans requête répétée ; une notification discrète « Messages connectés » le signale. Coupée la nuit (23 h – 8 h).
+- Modes 15 / 30 min : coup d'œil périodique, sans notification permanente.
 - Onglet de réglages dédié : aperçu, photo, réponse rapide, fréquence, heures calmes, notification d'essai.
 
 **Gestes**
@@ -50,7 +51,8 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 
 **Interface**
 - Barres façon application : ＋, ♥ (avec sa pastille de notification) et ⚙ en haut ; onglet actif en évidence en bas.
-- Bulle « Votre story » en tête des stories.
+- Bulle « Votre story » en tête des stories. Glisser une story vers le bas la referme dans son cercle.
+- Les flèches de retour d'Instagram reviennent à la page précédente.
 - Apparence : un fond (Système, Clair, Sombre, Sauge, Sable, Lavande, Nuit bleue, Forêt) et une couleur d'accent (8 choix). Les contrastes sont ajustés automatiquement pour rester lisibles.
 - Taille du texte réglable, compteur de temps passé dans la journée.
 
@@ -106,6 +108,7 @@ app/src/main/
   assets/js/explore.js      loupe par lots
   assets/js/reels.js        page Reels : plein écran, interrupteur, limite
   assets/js/gestures.js     double-tap, appui long, réactions
+  assets/js/stories.js      fermeture d'une story par glissement
   assets/js/notify.js       lecture des messages non lus, ouvrir / répondre
   assets/js/chrome.js       barres du haut / du bas, bulle « Votre story »
   assets/js/nonfollowers.js « Pas en retour »
@@ -113,7 +116,7 @@ app/src/main/
   assets/settings.html      écran de réglages (local, sans réseau)
   assets/themes.json        fonds et couleurs d'accent
   java/app/calmfeed/        MainActivity (onglets natifs), SettingsActivity, Prefs, Themes,
-                            Notifier, ReplyReceiver, InboxWorker, ScriptLib
+                            Notifier, ReplyReceiver, InboxWorker, DmService, ScriptLib
 ```
 
 Pour le débogage, la build debug permet d'inspecter la page via `chrome://inspect` ; tapez `window.__cfDebug` dans la console.

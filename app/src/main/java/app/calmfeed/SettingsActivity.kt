@@ -110,6 +110,7 @@ class SettingsActivity : Activity() {
             if (ok && (key == "bg" || key == "accent")) runOnUiThread { applyChrome() }
             if (ok && key.startsWith("notif")) {
                 InboxWorker.schedule(applicationContext)
+                DmService.sync(applicationContext)
                 if (key == "notifEnabled" && value == "true") runOnUiThread { askNotifPermission() }
             }
             return ok

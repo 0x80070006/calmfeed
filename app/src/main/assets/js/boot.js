@@ -26,10 +26,14 @@
   // Signal « page prête » à l'app : elle retire alors son écran de chargement (pas d'écran Instagram
   // ni de mise en page qui saute pendant le chargement).
   let readySent = false;
+  const t0 = Date.now();
   const readyCheck = () => {
     if (readySent) return;
     const main = document.querySelector('main');
-    if (main && main.childElementCount && main.getBoundingClientRect().height > 100) {
+    // Fil : on attend qu'il soit STABLE (posts triés, comptés), pas seulement que la page existe.
+    const feedOk = NS.pageOf(location.pathname) !== 'home' || !NS.feedStable || NS.feedStable() || Date.now() - t0 > 7000;
+    if (main && main.childElementCount && main.getBoundingClientRect().height > 100 && feedOk) {
+      NS.feedShown = true;
       readySent = true;
       setTimeout(() => NS.app && NS.app.ready && NS.app.ready(), 120);   // une frame de marge pour nos styles
     } else setTimeout(readyCheck, 150);

@@ -126,7 +126,7 @@ class Prefs(private val context: Context) {
             "exploreBatch" to IntRange(10, 3, 30),
             "reelsMax" to IntRange(10, 3, 50),
             "maxPerAuthor" to IntRange(1, 0, 5),          // 0 = illimité
-            "notifInterval" to IntRange(30, 0, 120),      // minutes ; 0 = seulement app ouverte
+            "notifInterval" to IntRange(1, 0, 120),       // 1 = instantané (temps réel) ; 15/30/60 = contrôles ; 0 = app ouverte seulement
             "textZoom" to IntRange(100, 85, 130),
         )
     }

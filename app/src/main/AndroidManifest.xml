@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Notifications de messages privés (demandée à l'activation) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Connexion temps réel aux messages en arrière-plan (notifications instantanées) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -36,6 +39,15 @@
         <receiver
             android:name=".ReplyReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".DmService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintien de la connexion temps réel aux messages privés pour les notifications" />
+        </service>
 
         <activity
             android:name=".SettingsActivity"

@@ -78,29 +78,41 @@ object Notifier {
      * Nouvelle photographie de la liste des non-lus.
      * @param silent l'utilisateur regarde déjà la liste : on mémorise sans notifier.
      */
+    /**
+     * Nouvelle photographie de la liste des non-lus. Seuls les messages NOUVEAUX notifient :
+     *  - « known » : dernier message vu pour chaque conversation non lue (notifiée ou non) ;
+     *  - premier passage (aucun état enregistré) : tout est mémorisé sans notifier ;
+     *  - une conversation ne notifie que si son dernier message a changé depuis le passage précédent ;
+     *  - une conversation lue est oubliée et sa notification retirée.
+     * @param silent l'utilisateur regarde déjà la liste : on mémorise sans notifier.
+     */
     fun onInbox(ctx: Context, list: List<Dm>, silent: Boolean) = io.execute {
         val prefs = Prefs(ctx)
         val st = state(ctx)
-        val notified = JSONObject(st.getString("notified", "{}")!!)
+        val known = JSONObject(st.getString("known", "{}")!!)
+        val posted = JSONObject(st.getString("posted", "{}")!!)
+        val firstRun = !st.getBoolean("initialized", false)
         val nm = NotificationManagerCompat.from(ctx)
 
-        // Conversations lues entre-temps : leur notification disparaît.
         val names = list.map { it.name }.toSet()
-        for (k in notified.keys().asSequence().toList()) if (k !in names) { nm.cancel(idFor(k)); notified.remove(k) }
+        for (k in known.keys().asSequence().toList()) if (k !in names) known.remove(k)
+        for (k in posted.keys().asSequence().toList()) if (k !in names) { nm.cancel(idFor(k)); posted.remove(k) }
+
+        val fresh = list.filter { known.optString(it.name, "\u0000") != it.text }
+        for (d in list) known.put(d.name, d.text)
 
         val enabled = prefs.bool("notifEnabled") && canPost(ctx)
-        val fresh = list.filter { notified.optString(it.name, "\u0000") != it.text }
-        if (!enabled || silent || prefs.quietNow()) {
-            if (silent) for (d in fresh) notified.put(d.name, d.text)   // déjà vus à l'écran
-            st.edit().putString("notified", notified.toString()).apply()
-            if (notified.length() < 2) nm.cancel(SUMMARY_ID)
+        val show = enabled && !silent && !firstRun && !prefs.quietNow()
+        if (show) for (d in fresh) posted.put(d.name, d.text)
+        st.edit().putString("known", known.toString()).putString("posted", posted.toString())
+            .putBoolean("initialized", true).apply()
+        if (!show || fresh.isEmpty()) {
+            if (posted.length() < 2) nm.cancel(SUMMARY_ID)
             return@execute
         }
-        for (d in fresh) notified.put(d.name, d.text)
-        st.edit().putString("notified", notified.toString()).apply()
 
         ensureChannel(ctx)
-        val active = list.filter { notified.has(it.name) }
+        val active = list.filter { posted.has(it.name) }
         val allowReply = prefs.bool("notifReply") && active.size == 1
         for (d in active) post(ctx, d, alert = d in fresh, reply = allowReply)
         if (active.size >= 2) postSummary(ctx, active) else nm.cancel(SUMMARY_ID)

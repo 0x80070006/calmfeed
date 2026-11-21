@@ -122,6 +122,11 @@
   }, { threshold: [0.6] }) : null;
   NS.dbg.skippedOld = 0;
 
+  // Fil « stable » : assez de posts triés et comptés (ou fin du fil) → l'app retire l'écran de chargement.
+  let lastWaiting = true;
+  NS.feedStable = () => limitReached || !!document.getElementById('cf-end') ||
+    (seen.size >= Math.min(2, C.maxPosts) && !lastWaiting);
+
   // Auteur d'une publication : premier lien de profil (/pseudo/) de l'en-tête du post.
   const perAuthor = new Map();
   const authorOf = (art) => {
@@ -222,6 +227,7 @@
       limitReached = seen.size >= C.maxPosts;
     }
     if (waiting && !settleTimer) settleTimer = setTimeout(() => { settleTimer = null; NS.schedule(); }, SETTLE_MS + 30);
+    lastWaiting = waiting;
     limitReached = seen.size >= C.maxPosts;
   };
 
@@ -232,7 +238,7 @@
    */
   let nudges = 0, lastNudge = 0;
   const nudge = (main) => {
-    if (limitReached || nudges >= 8 || Date.now() - lastNudge < 1500) return;
+    if (limitReached || nudges >= 12 || Date.now() - lastNudge < 1500) return;
     if (!main.querySelector('[role="progressbar"]')) return;
     let visible = 0;
     for (const a of main.getElementsByTagName('article')) if (!a.hasAttribute('data-cf-hidden')) visible++;
@@ -253,7 +259,7 @@
 
     // Rien d'inédit après les relances : on le dit plutôt que de laisser tourner le chargement.
     let nothingNew = false;
-    if (!limitReached && seen.size === 0 && nudges >= 8 && Date.now() - lastNudge > 2500) {
+    if (!limitReached && seen.size === 0 && nudges >= 12 && Date.now() - lastNudge > 2500) {
       nothingNew = [...arts].every(a => a.hasAttribute('data-cf-hidden'));
     }
     if (!limitReached && !nothingNew) return;

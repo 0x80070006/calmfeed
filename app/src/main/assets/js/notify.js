@@ -18,9 +18,12 @@
   const inboxRows = () => {
     const main = document.querySelector('main') || document.body;
     const out = [];
+    const minW = Math.max(200, (innerWidth || 400) * 0.6);
     for (const b of main.querySelectorAll('[role="button"][tabindex="0"]')) {
       const img = b.querySelector('img');
       if (!img) continue;
+      // Seules les vraies conversations (rangées pleine largeur) : pas les bulles de notes en haut.
+      if (b.getBoundingClientRect().width < minW) continue;
       const spans = [...b.querySelectorAll('span')].filter(s => s.childElementCount === 0 && s.textContent.trim());
       if (spans.length < 2) continue;
       out.push({ el: b, img, spans });

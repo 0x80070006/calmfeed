@@ -210,6 +210,21 @@
     if (n !== lastBadge) { lastBadge = n; NS.app.badge('direct', n); }
   };
 
+  // ------------------------------------------------------------------ flèches « retour » d'Instagram
+  // Les flèches en haut à gauche sont souvent des liens vers « / » : sans ceci, elles ouvraient
+  // l'onglet Accueil. Elles font maintenant exactement comme le retour système : page précédente
+  // dans l'onglet, puis la racine de l'onglet, puis l'Accueil.
+  const BACK_SEL = 'svg[aria-label="Back"], svg[aria-label="Retour"], svg[aria-label="Go back"]';
+  document.addEventListener('click', (e) => {
+    if (!NS.app || !NS.app.back || !e.isTrusted) return;     // nos propres clics (envoi de réponse) passent
+    const t = e.target && e.target.closest && e.target.closest('a, [role="button"], button');
+    if (!t || t.closest('.cf-sheet')) return;
+    if (!t.querySelector(BACK_SEL) && !t.matches('[aria-label="Back"], [aria-label="Retour"]')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    NS.app.back();
+  }, true);
+
   // ------------------------------------------------------------------ liens vers un autre onglet
   // Un lien vers la racine d'un autre onglet (Accueil, Recherche, Messages, son Profil) ouvre cet
   // onglet natif — déjà chargé — au lieu de recharger la page dans l'onglet courant.
