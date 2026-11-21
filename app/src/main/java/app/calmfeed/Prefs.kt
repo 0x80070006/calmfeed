@@ -87,6 +87,7 @@ class Prefs(private val context: Context) {
     companion object {
         val BOOLS = linkedMapOf(
             "followingOnly" to true,
+            "hideSeenPosts" to true,
             "hideAds" to true,
             "hideSuggestedPosts" to true,
             "noAutoplay" to true,

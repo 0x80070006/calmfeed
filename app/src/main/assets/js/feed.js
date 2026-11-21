@@ -87,6 +87,41 @@
   let limitReached = false;
   let settleTimer = null;
 
+  // ------------------------------------------------------------------ publications déjà vues
+  // Le fil « Suivi(e) » est chronologique : sans nouveauté, Instagram renvoie les mêmes posts.
+  // On retient (7 jours, sur le téléphone) les posts réellement affichés à l'écran, et au
+  // chargement suivant on les saute : chaque actualisation ne montre que de l'inédit.
+  const VIEW_KEY = 'cf_viewed_posts_v1';
+  const VIEW_TTL = 7 * 24 * 3600e3;
+  const viewed = (() => {
+    try {
+      const o = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}');
+      const now = Date.now();
+      for (const k of Object.keys(o)) if (now - o[k] > VIEW_TTL) delete o[k];
+      return o;
+    } catch (_) { return {}; }
+  })();
+  const viewedBefore = new Set(C.hideSeenPosts ? Object.keys(viewed) : []);   // figé au chargement de la page
+  let saveTimer = null;
+  const saveViewed = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const keys = Object.keys(viewed);
+      if (keys.length > 600) keys.sort((a, b) => viewed[a] - viewed[b]).slice(0, keys.length - 600).forEach(k => delete viewed[k]);
+      try { localStorage.setItem(VIEW_KEY, JSON.stringify(viewed)); } catch (_) {}
+    }, 800);
+  };
+  // « Vu » = au moins 60 % du post affiché à l'écran (pas seulement chargé en mémoire).
+  const viewObs = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (en.intersectionRatio < 0.6) continue;
+      const d = info.get(en.target);
+      if (d && !viewed[d.key]) { viewed[d.key] = Date.now(); saveViewed(); }
+      viewObs.unobserve(en.target);
+    }
+  }, { threshold: [0.6] }) : null;
+  NS.dbg.skippedOld = 0;
+
   // Pagination du fil uniquement, reconnue par le NOM de la requête ou le chemin REST.
   const FEED_PAGINATION = /feed.*(pagination|timeline)|timeline.*(feed|pagination)/i;
   NS.blockers.push((name, path) =>
@@ -109,16 +144,19 @@
       text-decoration:none}
   `);
 
-  const endCard = () => {
+  const endCard = (nothingNew) => {
     let card = document.getElementById('cf-end');
-    if (!card) {
-      card = document.createElement('div');
+    const kind = nothingNew ? 'empty' : 'limit';
+    if (!card || card.dataset.kind !== kind) {
+      card = card || document.createElement('div');
       card.id = 'cf-end';
+      card.dataset.kind = kind;
       card.innerHTML =
         '<div class="cf-check"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
         'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>' +
-        `<h3>Vous avez vu vos ${C.maxPosts} publications</h3>` +
-        '<p>Le fil s\'arrête ici. Revenez plus tard pour les suivantes.</p>' +
+        (nothingNew
+          ? '<h3>Rien de nouveau</h3><p>Vous avez déjà vu les dernières publications de vos abonnements. Revenez plus tard.</p>'
+          : `<h3>Vous avez vu vos ${C.maxPosts} publications</h3><p>Le fil s'arrête ici. Revenez plus tard pour les suivantes.</p>`) +
         '<a href="/direct/inbox/">Ouvrir les messages</a>';
     }
     return card;
@@ -145,6 +183,9 @@
       if (d.kind === null) {
         const k = classify(art);
         if (k !== 'ok') { d.kind = k; NS.hide(art, k); continue; }
+        if (viewedBefore.has(d.key) && !seen.has(d.key)) {          // déjà vu lors d'une visite précédente
+          d.kind = 'old'; NS.hide(art, 'old'); NS.dbg.skippedOld++; continue;
+        }
         if (!seen.has(d.key)) {
           if (limitReached) { NS.hide(art, 'limit'); continue; }
           // Pas encore compté : on laisse à une pub éventuelle le temps de se déclarer.
@@ -157,6 +198,7 @@
         if (seen.size < C.maxPosts) { seen.set(d.key, seen.size); NS.dbg.seen.push(d.key); }
         else NS.hide(art, 'limit');
       }
+      if (viewObs && !art.__cfObs && !art.hasAttribute('data-cf-hidden')) { art.__cfObs = true; viewObs.observe(art); }
       limitReached = seen.size >= C.maxPosts;
     }
     if (waiting && !settleTimer) settleTimer = setTimeout(() => { settleTimer = null; NS.schedule(); }, SETTLE_MS + 30);
@@ -185,14 +227,20 @@
   /** Carte de fin et fin de page (aucune lecture de géométrie). */
   const applyEnd = (main) => {
     nudge(main);
-    if (!limitReached) return;
     const arts = main.getElementsByTagName('article');
     if (!arts.length) return;
     const container = arts[0].parentElement;
-    if (!container.hasAttribute('data-cf-ended')) container.setAttribute('data-cf-ended', '');
 
+    // Rien d'inédit après les relances : on le dit plutôt que de laisser tourner le chargement.
+    let nothingNew = false;
+    if (!limitReached && seen.size === 0 && nudges >= 6 && Date.now() - lastNudge > 2500) {
+      nothingNew = [...arts].every(a => a.hasAttribute('data-cf-hidden'));
+    }
+    if (!limitReached && !nothingNew) return;
+
+    if (!container.hasAttribute('data-cf-ended')) container.setAttribute('data-cf-ended', '');
     for (const p of main.querySelectorAll('[role="progressbar"]')) if (!p.closest('article')) NS.hide(p, 'loader');
-    const card = endCard();
+    const card = endCard(nothingNew);
     if (card.previousElementSibling !== container) container.after(card);
   };
 

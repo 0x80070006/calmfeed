@@ -15,6 +15,7 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 **Fil d'actualité**
 - Nombre de publications par session au choix (5, 10, 15…). Ensuite, « Vous avez vu vos N publications » et le fil s'arrête : la page ne charge plus rien.
 - Uniquement les comptes suivis (chronologique), sans pubs ni publications suggérées. Les pubs ne comptent pas dans la limite.
+- Chaque actualisation ne montre que des publications inédites : celles déjà vues à l'écran sont sautées (mémoire de 7 jours sur le téléphone, désactivable).
 - Pas de lecture automatique des vidéos.
 
 **Reels et Explorer**
