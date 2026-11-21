@@ -18,12 +18,26 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 - Pas de lecture automatique des vidéos.
 
 **Reels et Explorer**
-- Reels bloqués : l'onglet, le flux et les reels dans le fil. Un reel reçu en message peut s'ouvrir seul (option).
+- Reels bloqués par défaut : l'onglet, le flux et les reels dans le fil. Un reel reçu en message peut s'ouvrir seul (option).
 - La loupe affiche la grille par lots (10 par défaut), avec un bouton « Voir 10 de plus ».
 
 **Personnes**
 - Suggestions d'amis masquées partout.
 - Bouton **« Pas en retour »** sur votre profil : la liste des comptes que vous suivez et qui ne vous suivent pas, avec « Se désabonner ».
+
+**Application**
+- Une WebView par onglet (Accueil, Recherche, Reels, Messages, Profil) sous une barre d'onglets native. Changer d'onglet est instantané : la page reste chargée, à la même position.
+- Retour ou glissement depuis le bord : retour à l'Accueil. Sur l'Accueil, « Glissez à nouveau pour quitter ».
+- Tirer vers le bas en haut du fil pour charger les dernières publications (au plus toutes les 20 s).
+
+**Gestes**
+- Double-tap sur une publication ou un reel : j'aime. Double-tap sur un message privé : ❤️.
+- Appui long sur un message privé : sélecteur de réactions d'Instagram.
+- Toutes ces actions passent par les boutons d'Instagram, avec au moins 1,2 s entre deux et 25 au plus en 10 minutes.
+
+**Reels** (si vous les autorisez)
+- Plein écran, avec ＋ (création) à gauche et un interrupteur « Pour toi / Abonnements » à droite. « Abonnements » utilise le fil « Following » d'Instagram.
+- Nombre de reels par session au choix, puis écran de fin.
 
 **Interface**
 - Barres façon application : ＋, ♥ (avec sa pastille de notification) et ⚙ en haut ; onglet actif en évidence en bas.
@@ -81,12 +95,14 @@ app/src/main/
   assets/js/feed.js         fil : reels, pubs, suggestions, limite, « Suivi(e) », autoplay
   assets/js/social.js       suggestions d'amis, bandeau « Utiliser l'application »
   assets/js/explore.js      loupe par lots
+  assets/js/reels.js        page Reels : plein écran, interrupteur, limite
+  assets/js/gestures.js     double-tap, appui long, réactions
   assets/js/chrome.js       barres du haut / du bas, bulle « Votre story »
   assets/js/nonfollowers.js « Pas en retour »
   assets/js/boot.js         démarrage
   assets/settings.html      écran de réglages (local, sans réseau)
   assets/themes.json        fonds et couleurs d'accent
-  java/app/calmfeed/        MainActivity, SettingsActivity, Prefs, Themes
+  java/app/calmfeed/        MainActivity (onglets natifs), SettingsActivity, Prefs, Themes
 ```
 
 Pour le débogage, la build debug permet d'inspecter la page via `chrome://inspect` ; tapez `window.__cfDebug` dans la console.

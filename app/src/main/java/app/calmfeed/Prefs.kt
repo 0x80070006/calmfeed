@@ -45,6 +45,7 @@ class Prefs(private val context: Context) {
     fun contentJson(): JSONObject = JSONObject().apply {
         put("maxPosts", maxPosts)
         put("exploreBatch", int("exploreBatch"))
+        put("reelsMax", int("reelsMax"))
         for (k in JS_BOOLS) put(k, bool(k))
     }
 
@@ -104,6 +105,7 @@ class Prefs(private val context: Context) {
         val INTS = mapOf(
             "maxPosts" to IntRange(15, 3, 50),
             "exploreBatch" to IntRange(10, 3, 30),
+            "reelsMax" to IntRange(10, 3, 50),
             "textZoom" to IntRange(100, 85, 130),
         )
     }

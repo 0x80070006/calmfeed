@@ -163,8 +163,28 @@
     limitReached = seen.size >= C.maxPosts;
   };
 
+  /**
+   * Relance douce : si la première page ne contenait presque que des reels (masqués), il ne reste
+   * rien à faire défiler et Instagram n'ira jamais chercher la suite. Un défilement de 2 px, comme
+   * un léger mouvement du doigt, la déclenche. Au plus 6 fois par chargement, espacées de 1,5 s.
+   */
+  let nudges = 0, lastNudge = 0;
+  const nudge = (main) => {
+    if (limitReached || nudges >= 6 || Date.now() - lastNudge < 1500) return;
+    if (!main.querySelector('[role="progressbar"]')) return;
+    let visible = 0;
+    for (const a of main.getElementsByTagName('article')) if (!a.hasAttribute('data-cf-hidden')) visible++;
+    if (visible >= 3 || document.documentElement.scrollHeight > innerHeight * 1.6) return;
+    nudges++;
+    lastNudge = Date.now();
+    scrollBy(0, 2);
+    dispatchEvent(new Event('scroll'));
+    setTimeout(() => { scrollBy(0, -2); dispatchEvent(new Event('scroll')); }, 120);
+  };
+
   /** Carte de fin et fin de page (aucune lecture de géométrie). */
   const applyEnd = (main) => {
+    nudge(main);
     if (!limitReached) return;
     const arts = main.getElementsByTagName('article');
     if (!arts.length) return;
@@ -192,16 +212,6 @@
   // ------------------------------------------------------------------ onglet « Suivi(e) »
   if (C.followingOnly) {
     NS.css('tabs', 'html[data-cf-page="home"] main [role="tablist"]{display:none!important}');
-
-    // Les liens « Accueil » mènent au fil « Pour vous » : on les redirige vers le fil des abonnements.
-    document.addEventListener('click', (e) => {
-      const a = e.target && e.target.closest && e.target.closest('a[href="/"]');
-      if (!a) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (/variant=following/.test(location.search) && location.pathname === '/') scrollTo({ top: 0, behavior: 'smooth' });
-      else NS.navigate('/?variant=following');
-    }, true);
   }
 
   let tabClicked = false;

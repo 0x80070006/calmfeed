@@ -33,7 +33,28 @@
     p === '/' ? 'home' :
     p.startsWith('/explore') ? 'explore' :
     p.startsWith('/direct') ? 'direct' :
+    p.startsWith('/reels') ? 'reels' :
     p.startsWith('/accounts') ? 'accounts' : 'other';
+
+  // Pont vers l'app native (une WebView par onglet ; C.tab = onglet de cette WebView).
+  NS.app = window.CalmApp || null;
+  NS.tab = C.tab || 'home';
+
+  /**
+   * Limiteur d'actions rapides (j'aime, réactions) : jamais plus vite qu'un humain.
+   * Au moins 1,2 s entre deux actions, 25 au plus sur 10 minutes glissantes.
+   */
+  const actLog = [];
+  let lastAct = 0;
+  NS.act = (what) => {
+    const now = Date.now();
+    while (actLog.length && now - actLog[0] > 600e3) actLog.shift();
+    if (now - lastAct < 1200) return false;
+    if (actLog.length >= 25) { NS.toast('Doucement : trop d\'actions en peu de temps'); return false; }
+    lastAct = now;
+    actLog.push(now);
+    return true;
+  };
 
   NS.cookie = (name) => {
     const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));

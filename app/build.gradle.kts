@@ -20,8 +20,8 @@ android {
         applicationId = "app.calmfeed"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     signingConfigs {
@@ -56,4 +56,5 @@ kotlin {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 }

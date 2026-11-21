@@ -35,10 +35,6 @@
       color:rgb(var(--ig-primary-icon,12,16,20))!important}
     [data-cf-hright] svg, [data-cf-hright] svg path{color:rgb(var(--ig-primary-icon,12,16,20))!important;fill:currentColor!important}
 
-    /* ---- barre du bas ---- */
-    a[data-cf-tab]{position:relative;isolation:isolate}
-    a[data-cf-tab][data-cf-active]::before{content:"";position:absolute;z-index:-1;top:50%;left:50%;width:76px;height:44px;
-      transform:translate(-50%,-50%);border-radius:22px;background:rgb(var(--ig-secondary-button-background,239,239,239))}
   `);
 
   const topHeader = () => document.querySelector('body > div header');
@@ -165,23 +161,22 @@
     for (const c of row.children) if (c !== left && c !== title) mark(c, 'data-cf-hright');
   };
 
-  // ------------------------------------------------------------------ barre du bas
+  // ------------------------------------------------------------------ barre du bas d'Instagram
+  // Remplacée par la barre native de l'app : on la masque, mais on lit encore ses liens
+  // (pseudo, photo de profil, pastille Messages) pour les transmettre à l'app.
   const tabFor = (href) => {
     if (!href) return null;
-    if (href === '/') return 'home';
+    if (href === '/' || href.startsWith('/?')) return 'home';
     if (href.startsWith('/explore')) return 'explore';
+    if (href.startsWith('/reels')) return 'reels';
     if (href.startsWith('/direct')) return 'direct';
-    if (/^\/[^/]+\/$/.test(href)) return 'profile';
-    return null;
-  };
-  const currentTab = () => {
-    const p = location.pathname;
-    if (p === '/') return 'home';
-    if (p.startsWith('/explore')) return 'explore';
-    if (p.startsWith('/direct')) return 'direct';
+    if (/^\/[A-Za-z0-9._]+\/$/.test(href)) return 'profile';
     return null;
   };
 
+  NS.css('ignav', '[data-cf-ignav]{display:none!important}');
+
+  let lastUser = '', lastBadge = -1;
   const processNav = () => {
     const dm = [...document.querySelectorAll('a[href="/direct/inbox/"]')].find(a => !a.closest('main') && !a.closest('header'));
     if (!dm) return;
@@ -189,19 +184,56 @@
     while (row.parentElement && row.parentElement.querySelectorAll('a[href]').length < 3) row = row.parentElement;
     row = row.parentElement;
     if (!row) return;
-    const cur = currentTab();
-    for (const a of row.querySelectorAll('a[href]')) {
-      const href = a.getAttribute('href');
-      if (href === '/reels/') {                       // retire la case entière : pas de trou entre les icônes
-        if (NS.C.hideReels) NS.hide(childOf(row, a), 'navReels');
-        continue;
-      }
-      const tab = tabFor(href);
-      if (!tab) continue;
-      mark(a, 'data-cf-tab', tab);
-      const active = tab === cur || (tab === 'profile' && location.pathname.startsWith(href));
-      if (active !== a.hasAttribute('data-cf-active')) active ? a.setAttribute('data-cf-active', '') : a.removeAttribute('data-cf-active');
+    // Conteneur fixe de la barre → masqué.
+    for (let e = row; e && e !== document.body; e = e.parentElement) {
+      if (getComputedStyle(e).position === 'fixed') { mark(e, 'data-cf-ignav'); break; }
     }
+    for (const a of row.querySelectorAll('a[href]')) {
+      const tab = tabFor(a.getAttribute('href'));
+      if (tab) mark(a, 'data-cf-tab', tab);
+    }
+    if (!NS.app) return;
+    // Pseudo + photo de profil → onglet Profil natif.
+    const me = row.querySelector('a[data-cf-tab="profile"]');
+    if (me) {
+      const name = me.getAttribute('href').replace(/\//g, '');
+      const img = me.querySelector('img');
+      const key = name + '|' + (img ? img.src : '');
+      if (key !== lastUser) { lastUser = key; NS.app.setUser(name, img ? (img.currentSrc || img.src) : ''); }
+    }
+    // Pastille Messages : « Direct messaging - 3 new notifications… ».
+    const cell = childOf(row, dm) || dm;
+    const lbl = [dm, ...cell.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label') || '')
+      .find(l => /\d/.test(l) && /notif|message/i.test(l)) || '';
+    const m = lbl.match(/(\d+)/);
+    const n = m ? +m[1] : 0;
+    if (n !== lastBadge) { lastBadge = n; NS.app.badge('direct', n); }
+  };
+
+  // ------------------------------------------------------------------ liens vers un autre onglet
+  // Un lien vers la racine d'un autre onglet (Accueil, Recherche, Messages, son Profil) ouvre cet
+  // onglet natif — déjà chargé — au lieu de recharger la page dans l'onglet courant.
+  document.addEventListener('click', (e) => {
+    if (!NS.app) return;
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a || a.closest('#cf-mystory')) return;
+    const href = a.getAttribute('href');
+    let tab = null;
+    if (href === '/' || href === '/?variant=following' || href === '/?variant=home') tab = 'home';
+    else if (href === '/explore/') tab = 'explore';
+    else if (href === '/reels/') tab = 'reels';
+    else if (href === '/direct/inbox/') tab = 'direct';
+    else if (lastUser && href === '/' + lastUser.split('|')[0] + '/') tab = 'profile';
+    if (!tab || tab === NS.tab) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    NS.app.switchTab(tab);
+  }, true);
+
+  /** Menu de création d'Instagram (Publication / Story / Reel), via le ＋ de l'en-tête. */
+  NS.openCreate = () => {
+    const plus = topHeader() && topHeader().querySelector('a[href="#"]');
+    if (plus) plus.click(); else NS.toast('Création indisponible ici');
   };
 
   const shape = (page) => {
