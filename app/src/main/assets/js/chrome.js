@@ -81,6 +81,8 @@
       display:grid;place-items:center;background:rgb(var(--ig-primary-button,74,93,249));color:#fff;
       box-shadow:0 0 0 3px rgb(var(--ig-primary-background,255,255,255))}
     #cf-mystory img{border-radius:50%}
+    [data-cf-plusbadge]{background:rgb(var(--ig-primary-button,74,93,249))!important;border-color:rgb(var(--ig-secondary-background,239,239,239))!important}
+    [data-cf-plusbadge] svg, [data-cf-plusbadge] svg *{color:#fff!important;stroke:#fff!important}
   `);
 
   const myUser = () => {
@@ -113,9 +115,22 @@
     const row = first.parentElement;
     const me = myUser();
     if (!row || !me) return;
-    const mine = row.querySelector(`[aria-label*="${me}"], [aria-label*="Your story"], [aria-label*="Votre story"]`);
+    // Bulle d'Instagram pour votre story : libellé, ou simple texte « Your story » / « Votre story ».
+    const mine = row.querySelector(`[aria-label*="${me}"], [aria-label*="Your story"], [aria-label*="Votre story"]`) ||
+      [...row.children].find(c => c.id !== 'cf-mystory' &&
+        [...c.querySelectorAll('span')].some(s => !s.childElementCount && /^(Your story|Votre story)$/i.test(s.textContent.trim())));
     let bubble = document.getElementById('cf-mystory');
-    if (mine && mine.id !== 'cf-mystory') { if (bubble) bubble.remove(); return; }   // story active : bulle d'Instagram
+    if (mine && mine.id !== 'cf-mystory') {
+      if (bubble) bubble.remove();
+      // Pastille ＋ d'Instagram : dessinée dans la couleur du fond (transparente avec nos thèmes) → on la rend visible.
+      for (const d of mine.querySelectorAll('div')) {
+        const r = d.getBoundingClientRect();
+        if (r.width > 12 && r.width < 30 && getComputedStyle(d).borderRadius === '50%' && getComputedStyle(d).position === 'absolute' && d.querySelector('svg')) {
+          if (!d.hasAttribute('data-cf-plusbadge')) d.setAttribute('data-cf-plusbadge', '');
+        }
+      }
+      return;
+    }
     if (bubble && bubble.parentElement === row && row.firstElementChild === bubble) return;
     if (bubble) bubble.remove();
 

@@ -6,22 +6,19 @@ import android.content.Intent
 import androidx.core.app.RemoteInput
 
 /**
- * Réponse saisie dans la notification.
- * App ouverte (même en arrière-plan) : envoi discret via l'onglet Messages, sans l'afficher.
- * App fermée : l'app s'ouvre sur la conversation et envoie le message.
+ * Réponse saisie dans une notification : envoyée en arrière-plan, sans ouvrir l'app
+ * (onglet Messages de l'app s'il existe, sinon page invisible du service).
  */
 class ReplyReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(Notifier.KEY_REPLY)?.toString()?.trim()
-        val name = intent.getStringExtra(Notifier.EXTRA_NAME) ?: return
-        val avatar = intent.getStringExtra("dm_avatar") ?: ""
+        val ref = intent.getStringExtra(Notifier.EXTRA_REF) ?: return
+        val key = intent.getStringExtra(Notifier.EXTRA_NAME) ?: ref
         if (text.isNullOrEmpty()) return
+        Notifier.onReplyPending(ctx, key, text)
         val live = MainActivity.live?.get()
-        if (live != null && live.sendDm(name, text, avatar)) return
-        ctx.startActivity(Intent(ctx, MainActivity::class.java)
-            .putExtra(Notifier.EXTRA_OPEN, name)
-            .putExtra(Notifier.EXTRA_TEXT, text)
-            .putExtra("dm_avatar", avatar)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        if (live != null && live.sendDm(ref, key, text)) return
+        DmService.send(ctx, Intent(DmService.ACTION_REPLY)
+            .putExtra(Notifier.EXTRA_REF, ref).putExtra(Notifier.EXTRA_NAME, key).putExtra(Notifier.EXTRA_TEXT, text))
     }
 }

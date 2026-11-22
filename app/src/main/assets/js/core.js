@@ -10,7 +10,7 @@
 
   const C = Object.assign({
     maxPosts: 15,
-    hideReels: true, hideFeedReels: true, allowSingleReel: true, hideExploreGrid: true,
+    soundOn: true, hideReels: true, hideFeedReels: true, allowSingleReel: true, hideExploreGrid: true,
     hideAds: true, hideSuggestedPosts: true, hideSuggestedAccounts: true,
     hideStories: false, followingOnly: true, noAutoplay: true,
     hideAppBanner: true, nonFollowersButton: true,
@@ -254,9 +254,26 @@
     if (KEEP.test(k) && this.__cfUrl && this.__cfUrl.includes('/api/')) igHeaders[k.toLowerCase()] = v;
     return origSet.apply(this, arguments);
   };
+  // ---- lecture des réponses GraphQL d'Instagram au passage (aucune requête en plus) ----
+  // NS.onGql(nom, fn) : fn(json) est appelée pour chaque réponse de la requête « nom ».
+  const gqlHandlers = new Map();
+  NS.onGql = (name, fn) => { if (!gqlHandlers.has(name)) gqlHandlers.set(name, []); gqlHandlers.get(name).push(fn); };
+  const feedGql = (name, text) => {
+    const fns = gqlHandlers.get(name);
+    if (!fns || !text) return;
+    for (const line of text.split(/\r?\n/)) {
+      const t = line.replace(/^for \(;;\);/, '').trim();
+      if (!t || t[0] !== '{') continue;
+      let j; try { j = JSON.parse(t); } catch (_) { continue; }
+      for (const fn of fns) { try { fn(j); } catch (e) { NS.err('gql:' + name, e); } }
+    }
+  };
+
   XO.send = function (body) {
     const g = decide(this.__cfUrl, body);
     if (g) { enqueue(g, () => origSend.call(this, body)); return; }
+    const name = reqName(bodyText(body));
+    if (name && gqlHandlers.has(name)) this.addEventListener('load', () => { try { feedGql(name, this.responseText); } catch (_) {} });
     return origSend.call(this, body);
   };
 
@@ -266,7 +283,10 @@
       const url = typeof input === 'string' ? input : (input && input.url) || '';
       const g = decide(url, init && init.body);
       if (g) return new Promise((resolve) => enqueue(g, () => resolve(origFetch(input, init))));
-      return origFetch(input, init);
+      const name = reqName(bodyText(init && init.body));
+      const p = origFetch(input, init);
+      if (name && gqlHandlers.has(name)) p.then(r => r.clone().text()).then(t => feedGql(name, t)).catch(() => {});
+      return p;
     };
   }
   NS.fetch = origFetch;
@@ -298,6 +318,57 @@
   igHeaders['x-asbd-id'] ? { 'x-asbd-id': igHeaders['x-asbd-id'] } : {},
   igHeaders['x-ig-www-claim'] ? { 'x-ig-www-claim': igHeaders['x-ig-www-claim'] } : {},
   extra || {});
+
+  /**
+   * Fin de limite (fil, Explorer) : bannière fixe qui couvre tout ce qui suit la dernière publication
+   * autorisée, et défilement bloqué juste sous la bannière. La liste d'Instagram n'est jamais modifiée.
+   * @param page   page concernée ('home', 'explore')
+   * @param endAbs () => position absolue (px) du bas de la dernière publication autorisée, ou null
+   */
+  NS.endGate = (page, endAbs, title, text) => {
+    let cover = null, raf = 0, active = false, lastEnd = null;
+    const MARGIN = 0.42;                                    // la bannière occupe le bas de l'écran
+    const place = () => {
+      raf = 0;
+      const on = active && NS.pageOf(location.pathname) === page;
+      if (!on) { if (cover) cover.classList.remove('on'); return; }
+      const e = endAbs();
+      if (e != null) lastEnd = e;
+      if (lastEnd == null) return;
+      if (!cover) {
+        cover = document.createElement('div');
+        cover.className = 'cf-endcover';
+        cover.innerHTML = '<div class="ck"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+          'stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>' +
+          `<h3>${title}</h3><p>${text}</p>`;
+        document.body.appendChild(cover);
+      }
+      // Défilement bloqué : on ne peut pas descendre au-delà de « bannière visible sur ~60 % de l'écran ».
+      const maxY = Math.max(0, lastEnd - innerHeight * (1 - MARGIN));
+      if (scrollY > maxY + 1) scrollTo({ top: maxY, behavior: 'instant' });
+      const top = Math.max(0, Math.round(lastEnd - scrollY));
+      cover.style.top = top + 'px';
+      cover.classList.toggle('on', top < innerHeight);
+    };
+    const tick = () => { if (!raf) raf = requestAnimationFrame(place); };
+    addEventListener('scroll', () => { if (active) tick(); }, { passive: true });
+    addEventListener('resize', () => { if (active) tick(); });
+    return {
+      set(on) { if (on !== active) { active = on; if (!on) lastEnd = null; } tick(); },
+      reset() { active = false; lastEnd = null; tick(); },
+    };
+  };
+  NS.css('endcover', `
+    .cf-endcover{position:fixed;left:0;right:0;bottom:0;z-index:5;display:none;flex-direction:column;align-items:center;
+      padding:36px 24px 0;text-align:center;font:15px/1.5 system-ui,sans-serif;
+      background:rgb(var(--ig-primary-background,255,255,255));color:rgb(var(--ig-primary-text,12,16,20));
+      border-top:1px solid rgb(var(--ig-separator,219,223,228))}
+    .cf-endcover.on{display:flex}
+    .cf-endcover .ck{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;margin-bottom:14px;
+      background:rgb(var(--ig-secondary-button-background,239,239,239));color:rgb(var(--ig-secondary-button,38,38,38))}
+    .cf-endcover h3{margin:0 0 6px;font-size:19px}
+    .cf-endcover p{margin:0;max-width:280px;color:rgb(var(--ig-secondary-text,106,113,122))}
+  `);
 
   NS.sleep = (ms, signal) => new Promise((ok, ko) => {
     const t = setTimeout(ok, ms);

@@ -1,23 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="CalmFeed">
   <title>CalmFeed</title>
   <defs>
-    <!-- Palette chaude inspirée des couleurs d'Instagram, appliquée au seul cadre -->
-    <linearGradient id="dusk" gradientUnits="userSpaceOnUse" x1="116" y1="116" x2="396" y2="396">
-      <stop offset="0" stop-color="#4F5BD5"/>
-      <stop offset=".28" stop-color="#962FBF"/>
-      <stop offset=".55" stop-color="#D62976"/>
-      <stop offset=".8" stop-color="#FA7E1E"/>
-      <stop offset="1" stop-color="#FEDA75"/>
+    <linearGradient id="dusk" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0" stop-color="#4F6CF7"/>
+      <stop offset=".3" stop-color="#8E2DE2"/>
+      <stop offset=".55" stop-color="#E1306C"/>
+      <stop offset=".8" stop-color="#FF8A2B"/>
+      <stop offset="1" stop-color="#FBE07A"/>
     </linearGradient>
+    <!-- Encoche dans l'angle haut-droit -->
+    <mask id="notch">
+      <rect width="512" height="512" fill="#fff"/>
+      <circle cx="512" cy="0" r="107" fill="#000"/>
+    </mask>
   </defs>
-
-  <rect width="512" height="512" rx="112" fill="#121012"/>
-
-  <!-- Cadre de post, ouvert dans l'angle haut-droit : le fil n'est plus refermé sur lui-même -->
-  <path fill="none" stroke="url(#dusk)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"
-        d="M396 200 V312 A84 84 0 0 1 312 396 H200 A84 84 0 0 1 116 312 V200 A84 84 0 0 1 200 116 H312"/>
-
-  <!-- Croissant de lune : heures calmes, ouvert vers l'ouverture du cadre -->
-  <circle cx="246" cy="266" r="62" fill="#FEDA75"/>
-  <circle cx="274" cy="242" r="52" fill="#121012"/>
+  <rect width="512" height="512" rx="109" fill="url(#dusk)" mask="url(#notch)"/>
+  <!-- Croissant de lune -->
+  <path fill="#fff" d="M272.7,95.3 A148,148 0 1,0 407.5,270.3 A110.5,110.5 0 1,1 272.7,95.3 Z"/>
 </svg>

@@ -17,7 +17,7 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 **Fil d'actualité**
 - Nombre de publications par session au choix (5, 10, 15…). Ensuite, « Vous avez vu vos N publications » et le fil s'arrête : la page ne charge plus rien.
 - Le fil d'Instagram tel quel (« Pour vous » par défaut, ou abonnements uniquement en option) : CalmFeed ne retire aucun post, il recouvre les reels et les pubs dans leur emplacement, donc le défilement reste celui d'Instagram.
-- Pas de lecture automatique des vidéos.
+- Pas de lecture automatique des vidéos ; son activé par défaut (vidéos, reels, stories).
 
 **Reels et Explorer**
 - Deux réglages séparés : masquer les reels du fil, masquer l'onglet Reels. Un reel reçu en message peut s'ouvrir seul (option).
@@ -33,15 +33,14 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 - Écran de chargement aux couleurs du thème le temps qu'un onglet se construise : pas de flash ni de mise en page qui saute.
 - Tirer vers le bas en haut du fil pour charger les dernières publications (au plus toutes les 20 s).
 
-**Notifications de messages privés**
-- Nom et photo de l'expéditeur, début du message, bouton « Répondre » quand il n'y a qu'une notification. La réponse passe par l'interface d'Instagram, en arrière-plan.
-- Seuls les nouveaux messages privés notifient (pas les notes, pas les conversations déjà non lues).
-- Mode Instantané (par défaut) : la connexion temps réel d'Instagram reste ouverte en arrière-plan, sans requête répétée ; une notification discrète « Messages connectés » le signale. Coupée la nuit (23 h – 8 h).
-- Modes 15 / 30 min : coup d'œil périodique, sans notification permanente.
-- Onglet de réglages dédié : aperçu, photo, réponse rapide, fréquence, heures calmes, notification d'essai.
+**Notifications**
+- Messages privés au style « conversation » d'Android : photo et nom de l'expéditeur, 3 derniers messages, type du contenu (🎤 vocal, 🎬 reel, 📷 photo…), groupes. Boutons « Répondre » (envoi en arrière-plan, confirmé « Envoyé ✓ ») et « Couper 1 h ».
+- Seuls les nouveaux messages notifient. Les données viennent de ce qu'Instagram charge déjà : aucune requête en plus.
+- Demandes d'abonnement : photo, nom, boutons « Confirmer » / « Supprimer ». Vérifiées quand la pastille ♥ apparaît, ou toutes les 30 min app fermée.
+- Mode Instantané : la connexion temps réel reste ouverte en arrière-plan (notification discrète « Messages connectés »), coupée la nuit (23 h – 8 h).
 
 **Gestes**
-- Double-tap sur une publication ou un reel : j'aime. Double-tap sur un message privé : ❤️.
+- Double-tap sur une publication ou un reel : j'aime. Double-tap sur n'importe quel message privé (texte, reel, vocal) : ❤️.
 - Appui long sur un message privé : sélecteur de réactions d'Instagram.
 - Toutes ces actions passent par les boutons d'Instagram, avec au moins 1,2 s entre deux et 25 au plus en 10 minutes.
 

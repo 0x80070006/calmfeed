@@ -25,15 +25,6 @@
       font:600 14px/1.5 system-ui,sans-serif;color:rgb(var(--ig-secondary-text,106,113,122));
       background:rgb(var(--ig-secondary-background,239,239,239));border-radius:14px;margin:8px 10px;opacity:.75}
     ${HOME} article[data-cf-veil="limit"]::after{display:none}
-    #cf-endcover{position:fixed;left:0;right:0;bottom:0;z-index:5;display:none;flex-direction:column;align-items:center;
-      padding:36px 24px 0;text-align:center;font:15px/1.5 system-ui,sans-serif;
-      background:rgb(var(--ig-primary-background,255,255,255));color:rgb(var(--ig-primary-text,12,16,20));
-      border-top:1px solid rgb(var(--ig-separator,219,223,228))}
-    html[data-cf-page="home"] #cf-endcover.on{display:flex}
-    #cf-endcover .ck{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;margin-bottom:14px;
-      background:rgb(var(--ig-secondary-button-background,239,239,239));color:rgb(var(--ig-secondary-button,38,38,38))}
-    #cf-endcover h3{margin:0 0 6px;font-size:19px}
-    #cf-endcover p{margin:0;max-width:280px;color:rgb(var(--ig-secondary-text,106,113,122))}
     ${HOME} [data-cf-quiet]{visibility:hidden!important}
   `);
 
@@ -126,43 +117,24 @@
       } else veil(art, 'limit');
     }
     limitReached = counted.size >= C.maxPosts;
-    if (limitReached && !raf) raf = requestAnimationFrame(placeCover);
+    gate.set(limitReached);
     // Fil terminé : l'indicateur de chargement en bas est rendu invisible (sans changer sa taille).
     if (limitReached) for (const p of main.querySelectorAll('[role="progressbar"]')) {
       if (!p.closest('article') && !p.hasAttribute('data-cf-quiet')) p.setAttribute('data-cf-quiet', '');
     }
   };
 
-  // ------------------------------------------------------------------ calque de fin (fixe, hors liste)
-  // Couvre l'écran depuis le bas de la dernière publication comptée : rien n'est visible en dessous,
-  // et la liste d'Instagram n'est jamais modifiée. Position absolue mémorisée (la publication peut
-  // être démontée quand on défile plus bas).
-  let endAbs = null, cover = null, raf = 0;
+  // ------------------------------------------------------------------ fin de limite : bannière + défilement bloqué
   const lastCounted = (main) => {
     let last = null;
     for (const art of main.getElementsByTagName('article')) { const k = postKey(art); if (k && counted.has(k)) last = art; }
     return last;
   };
-  function placeCover() {
-    raf = 0;
-    if (!limitReached || NS.pageOf(location.pathname) !== 'home') { if (cover) cover.classList.remove('on'); return; }
+  const gate = NS.endGate('home', () => {
     const main = document.querySelector('main');
     const last = main && lastCounted(main);
-    if (last) endAbs = last.getBoundingClientRect().bottom + scrollY;
-    if (endAbs == null) return;
-    if (!cover) {
-      cover = document.createElement('div');
-      cover.id = 'cf-endcover';
-      cover.innerHTML = '<div class="ck"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
-        'stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>' +
-        `<h3>Vous avez vu vos ${C.maxPosts} publications</h3><p>Le fil s'arrête ici. Revenez plus tard pour les suivantes.</p>`;
-      document.body.appendChild(cover);
-    }
-    const top = Math.max(0, Math.round(endAbs - scrollY));
-    cover.style.top = top + 'px';
-    cover.classList.toggle('on', top < innerHeight);
-  }
-  addEventListener('scroll', () => { if (limitReached && !raf) raf = requestAnimationFrame(placeCover); }, { passive: true });
+    return last ? last.getBoundingClientRect().bottom + scrollY : null;
+  }, `Vous avez vu vos ${C.maxPosts} publications`, 'Le fil s’arrête ici. Revenez plus tard pour les suivantes.');
 
   // ------------------------------------------------------------------ stories (hors liste : peut être masqué)
   const processStories = (main) => {
@@ -202,6 +174,37 @@
     addEventListener('play', (e) => {
       const v = e.target;
       if (v && v.tagName === 'VIDEO' && Date.now() - lastTap > 1500 && NS.pageOf(location.pathname) !== 'direct') v.pause();
+    }, true);
+  }
+
+  // ------------------------------------------------------------------ son activé par défaut
+  // Instagram garde son propre interrupteur de son (« Audio is muted ») : rendre la vidéo audible ne
+  // suffit pas, il faut basculer CET interrupteur. On le fait une fois par vidéo qui démarre.
+  // Si vous coupez le son vous-même avec ce bouton, ce choix est respecté.
+  if (C.soundOn) {
+    const MUTED = '[aria-label="Audio is muted"], [aria-label="Le son est coupé"], [aria-label="Son coupé"]';
+    let userMuted = false;
+    const done = new WeakSet();
+    addEventListener('click', (e) => {
+      if (!e.isTrusted) return;
+      const b = e.target && e.target.closest && e.target.closest('[role="button"], button');
+      if (!b) return;
+      const labels = [b, ...b.querySelectorAll('[aria-label]')].map(x => x.getAttribute('aria-label') || '').join(' ');
+      if (!/audio|sound|son|mute|muet/i.test(labels)) return;
+      userMuted = !/muted|coupé/i.test(labels);          // il était audible → l'utilisateur coupe
+    }, true);
+    const unmute = (scope) => {
+      if (userMuted) return;
+      const s = (scope && scope.querySelector(MUTED)) || document.querySelector(MUTED);
+      const b = s && (s.closest('[role="button"], button') || s);
+      if (b) b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    };
+    addEventListener('play', (e) => {
+      const v = e.target;
+      if (!v || v.tagName !== 'VIDEO' || v.closest('[data-cf-veil]') || done.has(v)) return;
+      done.add(v);
+      if (v.muted) v.muted = false;
+      setTimeout(() => unmute(v.closest('article') || v.closest('section') || document), 150);
     }, true);
   }
 

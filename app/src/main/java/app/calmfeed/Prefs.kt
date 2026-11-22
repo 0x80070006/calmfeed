@@ -102,6 +102,7 @@ class Prefs(private val context: Context) {
             "hideAds" to true,
             "hideSuggestedPosts" to true,
             "noAutoplay" to true,
+            "soundOn" to true,
             "hideStories" to false,
             "hideSuggestedAccounts" to true,
             "nonFollowersButton" to true,
@@ -117,6 +118,9 @@ class Prefs(private val context: Context) {
             "notifPhoto" to true,
             "notifReply" to true,
             "notifQuiet" to true,
+            "notifFollow" to true,
+            "notifMsgRequests" to false,
+            "notifSmartReply" to false,
         )
         /** Clés de contenu lues par le script injecté (startOnInbox est natif, decoShapes relève de l'apparence). */
         val JS_BOOLS = BOOLS.keys.filter { it != "startOnInbox" && it != "decoShapes" && !it.startsWith("notif") }

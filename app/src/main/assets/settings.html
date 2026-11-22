@@ -165,8 +165,8 @@
       </div>
     </div>
     <div class="card" style="margin-top:12px" id="exploreCard">
-      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Explorer : publications par lot</div>
-        <div class="d">Un bouton « Voir plus » affiche le lot suivant.</div></div></div>
+      <div class="row" style="padding-bottom:4px"><div class="txt"><div class="t">Explorer : publications au maximum</div>
+        <div class="d">Ensuite, une bannière arrête la grille (la recherche reste disponible).</div></div></div>
       <div class="seg" id="exploreBatch" style="padding-top:6px;padding-bottom:14px">
         <button data-v="6">6</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
       </div>
@@ -188,6 +188,9 @@
 
     <h2>Contenu de la notification</h2>
     <div class="card" id="notifContent"></div>
+
+    <h2>Autres notifications</h2>
+    <div class="card" id="notifFollowBox"></div>
 
     <h2>En arrière-plan</h2>
     <div class="card">
@@ -247,6 +250,7 @@
       ['hideAds', 'Masquer les publicités'],
       ['hideSuggestedPosts', 'Masquer les publications suggérées'],
       ['noAutoplay', 'Pas de lecture automatique', 'Les vidéos démarrent quand vous les touchez'],
+      ['soundOn', 'Son activé par défaut', 'Vidéos, reels et stories avec le son (coupable avec le bouton d’Instagram)'],
       ['hideStories', 'Masquer les stories'],
     ],
     peopleToggles: [
@@ -269,7 +273,12 @@
     notifContent: [
       ['notifPreview', 'Afficher le début du message', 'Sinon : « Nouveau message »', 'notifEnabled'],
       ['notifPhoto', 'Afficher la photo de l’expéditeur', null, 'notifEnabled'],
-      ['notifReply', 'Réponse rapide', 'Répondre depuis la notification quand il n’y en a qu’une', 'notifEnabled'],
+      ['notifReply', 'Réponse rapide', 'Répondre depuis la notification, sans ouvrir l’app', 'notifEnabled'],
+      ['notifSmartReply', 'Suggestions de réponse', 'Réponses courtes proposées par Android', 'notifReply'],
+    ],
+    notifFollowBox: [
+      ['notifFollow', 'Demandes d’abonnement', 'Avec Confirmer / Supprimer dans la notification', 'notifEnabled'],
+      ['notifMsgRequests', 'Demandes de messages', 'Messages de personnes que vous ne suivez pas', 'notifEnabled'],
     ],
     notifQuietBox: [
       ['notifQuiet', 'Heures calmes (23 h – 8 h)', 'Ni vérification ni notification la nuit', 'notifEnabled'],

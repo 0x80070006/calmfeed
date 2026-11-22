@@ -327,7 +327,7 @@ class MainActivity : Activity() {
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = prefs.bool("noAutoplay") && tab != "reels"
+            mediaPlaybackRequiresUserGesture = false   // son permis ; la lecture auto est gérée par le script
             setSupportMultipleWindows(false)
             loadWithOverviewMode = true
             useWideViewPort = true
@@ -431,13 +431,24 @@ class MainActivity : Activity() {
         handlers[tab] = WebViewCompat.addDocumentStartJavaScript(web, scriptFor(tab), setOf(IG))
     }
 
+    /**
+     * Barre du bas : toujours la page racine de l'onglet (maison → fil, loupe → Explorer,
+     * avion → liste des messages…). Déjà à la racine de l'onglet actif : retour en haut.
+     */
     private fun onTabTapped(tab: String) {
-        if (tab == current) {
-            // Re-toucher l'onglet actif : retour en haut, comme l'application.
-            webs[tab]?.evaluateJavascript("window.scrollTo({top:0,behavior:'smooth'})", null)
+        val wasCurrent = tab == current
+        switchTo(tab)
+        val web = webs[tab] ?: return
+        val root = urlFor(tab) ?: return
+        if (isTabRoot(tab, web.url)) {
+            if (wasCurrent) web.evaluateJavascript("window.scrollTo({top:0,behavior:'smooth'})", null)
             return
         }
-        switchTo(tab)
+        // Navigation interne d'Instagram (instantanée), sinon chargement normal.
+        val path = Uri.parse(root).let { it.path + (it.query?.let { q -> "?$q" } ?: "") }
+        web.evaluateJavascript("window.__cf&&window.__cf.navigate?(window.__cf.navigate(${JSONObject.quote(path)}),true):false") { ok ->
+            if (ok != "true") web.loadUrl(root)
+        }
     }
 
     private fun switchTo(tab: String) {
@@ -519,17 +530,31 @@ class MainActivity : Activity() {
 
         /** Liste des conversations non lues (onglet Messages). */
         @JavascriptInterface
-        fun dmUnread(json: String) {
+        fun dmUnread(json: String) = runOnUiThread {        // WebView.url : thread principal uniquement
             val watching = isResumed && current == "direct" &&
                 (webs["direct"]?.url ?: "").contains("/direct/inbox")
             Notifier.onInbox(applicationContext, Notifier.parse(json), silent = watching)
         }
 
         @JavascriptInterface
-        fun dmSent(name: String, ok: Boolean) = runOnUiThread {
-            val pending = replies.remove(name) ?: return@runOnUiThread
-            Notifier.onReplied(applicationContext, name, pending.second, pending.first, ok)
+        fun dmSent(ref: String, ok: Boolean) = runOnUiThread {
+            val (key, text) = replies.remove(ref) ?: return@runOnUiThread
+            Notifier.onReplied(applicationContext, key, text, ok)
         }
+
+        /** Demandes de messages (inconnus) : compteur. */
+        @JavascriptInterface
+        fun msgRequests(n: Int) = Notifier.onMsgRequests(applicationContext, n)
+
+        /** Pastille ♥ apparue : vérification des demandes d'abonnement (service, page invisible). */
+        @JavascriptInterface
+        fun activityBadge(on: Boolean) {
+            if (on && prefs.bool("notifFollow")) DmService.send(applicationContext,
+                Intent(DmService.ACTION_FOLLOW_CHECK).putExtra("force", true))
+        }
+
+        @JavascriptInterface fun followRequests(json: String) = Notifier.onFollowRequests(applicationContext, json)
+        @JavascriptInterface fun followDone(u: String, accept: Boolean, ok: Boolean) {}
 
         @JavascriptInterface
         fun haptic() = runOnUiThread { root.performHapticFeedback(HapticFeedbackConstants.CONFIRM) }
@@ -570,7 +595,7 @@ class MainActivity : Activity() {
             refreshConfig()
             for ((tab, web) in webs) {
                 web.settings.textZoom = prefs.textZoom
-                web.settings.mediaPlaybackRequiresUserGesture = prefs.bool("noAutoplay") && tab != "reels"
+                web.settings.mediaPlaybackRequiresUserGesture = false   // son permis ; la lecture auto est gérée par le script
                 web.setBackgroundColor(Themes.chrome(this, prefs.theme()).bg)
                 installScript(tab, web)
                 if (contentChanged) { showOverlay(tab); web.reload() }
@@ -668,37 +693,39 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------------ notifications
 
-    /** Réponses envoyées depuis une notification, en attente de confirmation : nom → (texte, photo). */
+    /** Réponses envoyées depuis une notification, en attente de confirmation : réf → (clé, texte). */
     private val replies = HashMap<String, Pair<String, String>>()
 
     /** L'onglet Messages existe : il porte la connexion temps réel (le service n'en ouvre pas d'autre). */
     fun hasDirectTab(): Boolean = webs["direct"] != null
 
-    /** Envoie une réponse via l'onglet Messages, sans l'afficher. Faux si l'onglet n'existe pas. */
-    fun sendDm(name: String, text: String, avatar: String): Boolean {
+    /** Exécute un script dans l'onglet Messages dès qu'il est prêt (utilisé par le service). */
+    fun evalOnDirect(js: String) = runOnUiThread { whenReady("direct") { webs["direct"]?.evaluateJavascript(js, null) } }
+
+    /**
+     * Envoie une réponse via l'onglet Messages, sans l'afficher. Faux si l'onglet n'existe pas.
+     * @param ref identifiant de la conversation (ou nom affiché), @param key clé de la notification
+     */
+    fun sendDm(ref: String, key: String, text: String): Boolean {
         if (webs["direct"] == null) return false
         runOnUiThread {
-            replies[name] = text to avatar
+            replies[ref] = key to text
             whenReady("direct") {
                 webs["direct"]?.evaluateJavascript(
-                    "window.__cf&&window.__cf.sendTo(${JSONObject.quote(name)},${JSONObject.quote(text)})", null)
+                    "window.__cf&&window.__cf.sendTo(${JSONObject.quote(ref)},${JSONObject.quote(text)})", null)
             }
         }
         return true
     }
 
+    /** Notification touchée : ouvre la conversation (par identifiant exact si connu). */
     private fun handleNotificationIntent(intent: Intent?) {
-        val name = intent?.getStringExtra(Notifier.EXTRA_OPEN) ?: return
-        val text = intent.getStringExtra(Notifier.EXTRA_TEXT)
+        val ref = intent?.getStringExtra(Notifier.EXTRA_OPEN) ?: return
         intent.removeExtra(Notifier.EXTRA_OPEN)
         if (webs["direct"] == null) createWeb("direct").loadUrl(urlFor("direct")!!)
-        if (text != null) {
-            sendDm(name, text, intent.getStringExtra("dm_avatar") ?: "")
-            return                                   // réponse : envoyée en arrière-plan
-        }
         switchTo("direct")
         whenReady("direct") {
-            webs["direct"]?.evaluateJavascript("window.__cf&&window.__cf.openThread(${JSONObject.quote(name)})", null)
+            webs["direct"]?.evaluateJavascript("window.__cf&&window.__cf.openThread(${JSONObject.quote(ref)})", null)
         }
     }
 

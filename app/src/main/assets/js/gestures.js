@@ -38,9 +38,11 @@
 
   // ------------------------------------------------------------------ cibles
   /** Le plus petit ancêtre qui contient exactement UN bouton correspondant au sélecteur. */
-  const ownerWith = (target, sel, maxDepth = 14) => {
+  // Nombre de boutons distincts (le libellé est porté à la fois par le bouton et par son icône).
+  const countBtns = (root, sel) => new Set([...root.querySelectorAll(sel)].map(x => x.closest('[role="button"], button') || x)).size;
+  const ownerWith = (target, sel, maxDepth = 24) => {
     for (let e = target, d = 0; e && e !== document.body && d < maxDepth; e = e.parentElement, d++) {
-      const n = e.querySelectorAll(sel).length;
+      const n = countBtns(e, sel);
       if (n === 1) return e;
       if (n > 1) return null;      // on est monté au-dessus de plusieurs publications
     }
@@ -69,7 +71,8 @@
   };
 
   const reactTo = async (target, emoji) => {
-    const row = ownerWith(target, REACT);
+    // Instagram ne crée le bouton « Réagir » d'un message qu'après l'avoir touché : on l'attend.
+    const row = ownerWith(target, REACT) || await waitFor(() => ownerWith(target, REACT), 700);
     if (!row) return false;
     const b = btnOf(row.querySelector(REACT));
     if (!b) return false;
@@ -88,18 +91,26 @@
 
   // ------------------------------------------------------------------ détection des gestes
   const INTERACTIVE = 'button, input, textarea, select, [contenteditable="true"], [role="textbox"], header, nav, #cf-top, .cf-sheet';
+  // Dans une conversation, tout message compte (texte, reel partagé, vocal) : seule la saisie est exclue.
+  const TYPING = 'input, textarea, select, [contenteditable="true"], [role="textbox"], header, nav, [role="dialog"]';
+  const ACTIONS = '[aria-label^="React"], [aria-label^="Reply"], [aria-label^="See more"], [aria-label^="Réagir"], [aria-label^="Répondre"]';
+  // Zone d'un message : contenu de la conversation, hors saisie, en-tête et boutons d'action.
+  const inMessage = (el) => isThread() && el && el.closest && !el.closest(TYPING) && !el.closest(ACTIONS) &&
+    !el.closest('[data-cf-ignav], .cf-sheet, #cf-toast');
+
   let down = null, pressTimer = null, lastTap = null, suppressClickUntil = 0;
+  let heldClick = null;                 // clic simple différé (double-tap possible)
 
   addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     down = { x: e.clientX, y: e.clientY, t: Date.now(), target: e.target, moved: false };
     clearTimeout(pressTimer);
-    if (isThread() && !e.target.closest(INTERACTIVE)) {
+    if (inMessage(e.target)) {
       pressTimer = setTimeout(async () => {
         if (!down || down.moved) return;
-        const ok = await reactTo(down.target, null);
+        const ok = await reactTo(down.target, null);           // appui long : panneau de réactions
         if (ok) { suppressClickUntil = Date.now() + 700; down = null; }
-      }, 460);
+      }, 450);
     }
   }, true);
 
@@ -113,12 +124,14 @@
     if (!down || down.moved || Date.now() - down.t > 350) { down = null; return; }
     const tap = { x: e.clientX, y: e.clientY, t: Date.now(), target: down.target };
     down = null;
-    if (lastTap && tap.t - lastTap.t < 300 && Math.abs(tap.x - lastTap.x) < 32 && Math.abs(tap.y - lastTap.y) < 32) {
+    if (lastTap && tap.t - lastTap.t < 300 && Math.abs(tap.x - lastTap.x) < 40 && Math.abs(tap.y - lastTap.y) < 40) {
       lastTap = null;
+      if (heldClick) { clearTimeout(heldClick.timer); heldClick = null; }   // annule l'ouverture du message
+      suppressClickUntil = Date.now() + 400;
+      if (isThread()) { if (inMessage(tap.target)) reactTo(tap.target, '❤️'); return; }
       if (tap.target.closest(INTERACTIVE) && !tap.target.closest('article video, article img')) return;
       const page = NS.pageOf(location.pathname);
-      if (isThread()) reactTo(tap.target, '❤️');
-      else if (page === 'home' || page === 'reels' || page === 'other') likeAt(tap.target, tap.x, tap.y);
+      if (page === 'home' || page === 'reels' || page === 'other') likeAt(tap.target, tap.x, tap.y);
       return;
     }
     lastTap = tap;
@@ -126,9 +139,29 @@
   addEventListener('pointerup', end, true);
   addEventListener('pointercancel', () => { clearTimeout(pressTimer); down = null; }, true);
 
-  // Après un appui long, le relâchement ne doit pas ouvrir le post/reel partagé.
   addEventListener('click', (e) => {
-    if (Date.now() < suppressClickUntil && !e.target.closest('[role="dialog"]')) { e.preventDefault(); e.stopImmediatePropagation(); }
+    if (e.__cfReplay) return;
+    // Après un appui long ou un double-tap : le relâchement n'ouvre rien. Seuls VOS clics sont
+    // bloqués : ceux de l'app (bouton « Réagir », emoji) doivent passer.
+    if (e.isTrusted && Date.now() < suppressClickUntil && !e.target.closest('[role="dialog"]')) {
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+    // Clic simple sur un message (reel partagé, vocal, lien) : différé de 280 ms pour laisser
+    // la place au double-tap, puis rejoué tel quel.
+    if (e.isTrusted && inMessage(e.target)) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const target = e.target;
+      if (heldClick) clearTimeout(heldClick.timer);
+      heldClick = { timer: setTimeout(() => {
+        heldClick = null;
+        const ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+        ev.__cfReplay = true;
+        target.dispatchEvent(ev);
+      }, 280) };
+    }
   }, true);
   addEventListener('contextmenu', (e) => { if (isThread()) e.preventDefault(); }, true);
+  // Double-clic natif d'Instagram neutralisé dans les conversations : seul le double-tap CalmFeed agit
+  // (sinon les deux s'annulent : ❤️ puis retrait).
+  addEventListener('dblclick', (e) => { if (isThread()) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
 })();

@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -21,24 +22,27 @@ import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import org.json.JSONObject
 
 /**
- * Notifications instantanées, sans requête périodique.
- *
- * Instagram pousse les messages en temps réel sur une connexion ouverte (pas d'API à interroger).
- * Ce service garde cette connexion vivante quand l'app est en arrière-plan :
- *  - l'onglet Messages de l'app s'en charge tant qu'elle existe ;
- *  - si l'app a été fermée, le service ouvre seul la page Messages, invisible ;
- *  - toutes les minutes, un contrôle LOCAL (aucune requête) vérifie que la page est vivante ;
- *  - heures calmes : la connexion est coupée la nuit (batterie), puis rétablie à 8 h.
- * Android exige une notification permanente pour ce type de service : elle est réduite au minimum.
+ * Service d'arrière-plan :
+ *  - garde la connexion temps réel aux messages quand l'app est fermée (mode Instantané) ;
+ *  - exécute les actions venues des notifications sans ouvrir l'app : répondre, confirmer ou
+ *    supprimer une demande d'abonnement ;
+ *  - vérifie les demandes d'abonnement : quand la pastille ♥ apparaît (app ouverte), sinon au plus
+ *    toutes les 30 min (app fermée), jamais la nuit.
+ * Chaque tâche ponctuelle utilise une page invisible détruite dès la fin.
  */
 class DmService : Service() {
 
     private val main = Handler(Looper.getMainLooper())
-    private var web: WebView? = null
-    private var webStartedAt = 0L
-    private var lastReport = 0L
+    private var dmWeb: WebView? = null
+    private var dmReady = false
+    private var dmStartedAt = 0L
+    private val dmQueue = ArrayList<String>()
+    private val replies = HashMap<String, Pair<String, String>>()      // ref -> (clé, texte)
+    private var lastFollowCheck = 0L
+    private var tasks = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -57,76 +61,137 @@ class DmService : Service() {
             .setContentTitle("Messages connectés")
             .setContentText("Notifications instantanées actives")
             .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setOngoing(true)
-            .setSilent(true)
-            .setContentIntent(open)
-            .build()
+            .setOngoing(true).setSilent(true).setContentIntent(open).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(ID, n)
+        lastFollowCheck = getSharedPreferences("notif_state", MODE_PRIVATE).getLong("follow_check", 0)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_REPLY -> {
+                val ref = intent.getStringExtra(Notifier.EXTRA_REF) ?: return START_NOT_STICKY
+                val key = intent.getStringExtra(Notifier.EXTRA_NAME) ?: ref
+                val text = intent.getStringExtra(Notifier.EXTRA_TEXT) ?: return START_NOT_STICKY
+                replies[ref] = key to text
+                runOnDm("window.__cf&&window.__cf.sendTo(${JSONObject.quote(ref)},${JSONObject.quote(text)})")
+            }
+            ACTION_FOLLOW_CHECK -> followCheck(force = intent.getBooleanExtra("force", false))
+            ACTION_FOLLOW_ACT -> {
+                val f = Notifier.Follow(intent.getStringExtra("username") ?: return START_NOT_STICKY,
+                    intent.getStringExtra("name") ?: "", intent.getStringExtra("avatar") ?: "")
+                val accept = intent.getBooleanExtra("accept", false)
+                runTask("/notifications/",
+                    "window.__cf&&window.__cf.followAct(${JSONObject.quote(f.username)},$accept)",
+                    onFollowDone = { u, a, ok -> if (u == f.username) Notifier.onFollowDone(this, f, a, ok) })
+            }
+        }
         main.removeCallbacks(watchdog)
         main.post(watchdog)
         return START_STICKY
     }
 
-    /** Contrôle local, toutes les minutes. */
+    // ------------------------------------------------------------------ connexion temps réel
     private val watchdog = object : Runnable {
         override fun run() {
             val prefs = Prefs(this@DmService)
-            if (!wanted(this@DmService)) { stopSelf(); return }
             val appHandles = MainActivity.live?.get()?.hasDirectTab() == true
+            val instant = wanted(this@DmService)
             when {
-                prefs.quietNow() || appHandles -> dropWeb()                        // nuit, ou l'app s'en charge
-                web == null -> createWeb(prefs)
-                SystemClock.elapsedRealtime() - webStartedAt > 6 * 3600_000 -> { dropWeb(); createWeb(prefs) }  // rafraîchit 1×/6 h
+                !instant && dmQueue.isEmpty() && tasks == 0 -> { dropDm(); stopSelf(); return }
+                (prefs.quietNow() || appHandles || !instant) && dmQueue.isEmpty() -> dropDm()
+                dmWeb == null && instant -> createDm(prefs)
+                SystemClock.elapsedRealtime() - dmStartedAt > 6 * 3600_000 && dmQueue.isEmpty() -> { dropDm(); createDm(prefs) }
             }
+            // App fermée : demandes d'abonnement au plus toutes les 30 min.
+            if (instant && !appHandles && !prefs.quietNow()) followCheck(force = false)
             main.postDelayed(this, 60_000)
         }
     }
 
+    private fun runOnDm(js: String) {
+        val live = MainActivity.live?.get()
+        if (live != null && live.hasDirectTab()) { live.evalOnDirect(js); return }
+        if (dmWeb == null) createDm(Prefs(this))
+        if (dmReady) dmWeb?.evaluateJavascript(js, null) else dmQueue.add(js)
+    }
+
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
-    private fun createWeb(prefs: Prefs) {
+    private fun newWeb(prefs: Prefs, path: String, tab: String, bridge: Any): WebView {
         val w = WebView(applicationContext)
         ScriptLib.configure(w, this)
         w.settings.mediaPlaybackRequiresUserGesture = true
-        w.settings.blockNetworkImage = false                  // photos des expéditeurs pour la notification
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
         w.webViewClient = WebViewClient()
-        w.addJavascriptInterface(Bridge(), "CalmApp")
-        // Taille d'écran réelle : la page doit être mise en page pour qu'on lise la liste.
-        val dm = resources.displayMetrics
-        w.measure(
-            android.view.View.MeasureSpec.makeMeasureSpec(dm.widthPixels, android.view.View.MeasureSpec.EXACTLY),
-            android.view.View.MeasureSpec.makeMeasureSpec(dm.heightPixels, android.view.View.MeasureSpec.EXACTLY))
+        w.addJavascriptInterface(bridge, "CalmApp")
+        val dm = resources.displayMetrics      // taille réelle : la page doit être mise en page pour être lue
+        w.measure(View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY))
         w.layout(0, 0, dm.widthPixels, dm.heightPixels)
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(w, ScriptLib.script(this, prefs.toJsConfig(), "direct"), setOf(ScriptLib.IG))
+            WebViewCompat.addDocumentStartJavaScript(w, ScriptLib.script(this, prefs.toJsConfig(), tab), setOf(ScriptLib.IG))
         }
-        w.loadUrl("${ScriptLib.IG}/direct/inbox/")
-        web = w
-        webStartedAt = SystemClock.elapsedRealtime()
+        // Une page hors fenêtre démarre « en pause » : on la réveille explicitement.
+        w.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+        w.onResume()
+        w.resumeTimers()
+        w.loadUrl(ScriptLib.IG + path)
+        return w
     }
 
-    private fun dropWeb() {
-        web?.apply { stopLoading(); destroy() }
-        web = null
+    private fun createDm(prefs: Prefs) {
+        dmReady = false
+        dmWeb = newWeb(prefs, "/direct/inbox/", "direct", Bridge(
+            onReady = { main.post { dmReady = true; for (js in dmQueue) dmWeb?.evaluateJavascript(js, null); dmQueue.clear() } }))
+        dmStartedAt = SystemClock.elapsedRealtime()
+    }
+
+    private fun dropDm() { dmWeb?.apply { stopLoading(); destroy() }; dmWeb = null; dmReady = false }
+
+    // ------------------------------------------------------------------ tâches ponctuelles
+    private fun runTask(path: String, js: String, onFollowDone: ((String, Boolean, Boolean) -> Unit)? = null) {
+        tasks++
+        var web: WebView? = null
+        val finish = Runnable { web?.apply { stopLoading(); destroy() }; web = null; tasks-- }
+        web = newWeb(Prefs(this), path, "other", Bridge(
+            onReady = { main.post { web?.evaluateJavascript(js, null) } },
+            onFollowList = { json -> Notifier.onFollowRequests(this, json); main.post(finish) },
+            onFollowDone = { u, a, ok -> onFollowDone?.invoke(u, a, ok); main.post(finish) }))
+        main.postDelayed(finish, 45_000)                           // garde-fou
+    }
+
+    private fun followCheck(force: Boolean) {
+        val prefs = Prefs(this)
+        if (!prefs.bool("notifEnabled") || !prefs.bool("notifFollow") || !Notifier.canPost(this)) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastFollowCheck < 30 * 60_000) return
+        if (force && now - lastFollowCheck < 60_000) return     // pastille : au plus 1 fois / 5 min
+        lastFollowCheck = now
+        getSharedPreferences("notif_state", MODE_PRIVATE).edit().putLong("follow_check", now).apply()
+        runTask("/notifications/", "window.__cf&&window.__cf.followRequests()")
     }
 
     override fun onDestroy() {
         main.removeCallbacks(watchdog)
-        dropWeb()
+        dropDm()
         super.onDestroy()
     }
 
-    private inner class Bridge {
-        @JavascriptInterface fun dmUnread(json: String) {
-            lastReport = SystemClock.elapsedRealtime()
-            Notifier.onInbox(applicationContext, Notifier.parse(json), silent = false)
+    private inner class Bridge(
+        val onReady: () -> Unit = {},
+        val onFollowList: (String) -> Unit = {},
+        val onFollowDone: (String, Boolean, Boolean) -> Unit = { _, _, _ -> },
+    ) {
+        @JavascriptInterface fun dmUnread(json: String) = Notifier.onInbox(applicationContext, Notifier.parse(json), silent = false)
+        @JavascriptInterface fun dmSent(ref: String, ok: Boolean) {
+            val (key, text) = replies.remove(ref) ?: return
+            Notifier.onReplied(applicationContext, key, text, ok)
         }
-        @JavascriptInterface fun dmSent(name: String, ok: Boolean) {}
-        @JavascriptInterface fun ready() {}
+        @JavascriptInterface fun msgRequests(n: Int) = Notifier.onMsgRequests(applicationContext, n)
+        @JavascriptInterface fun followRequests(json: String) = onFollowList(json)
+        @JavascriptInterface fun followDone(u: String, accept: Boolean, ok: Boolean) = onFollowDone(u, accept, ok)
+        @JavascriptInterface fun ready() = onReady()
+        @JavascriptInterface fun activityBadge(on: Boolean) {}
         @JavascriptInterface fun setUser(name: String, avatar: String) {}
         @JavascriptInterface fun badge(id: String, count: Int) {}
         @JavascriptInterface fun toast(msg: String) {}
@@ -134,11 +199,15 @@ class DmService : Service() {
         @JavascriptInterface fun switchTab(id: String) {}
         @JavascriptInterface fun openSettings() {}
         @JavascriptInterface fun openCreate() {}
+        @JavascriptInterface fun back() {}
     }
 
     companion object {
         private const val CHANNEL = "dm_link"
         private const val ID = 77
+        const val ACTION_REPLY = "app.calmfeed.REPLY"
+        const val ACTION_FOLLOW_CHECK = "app.calmfeed.FOLLOW_CHECK"
+        const val ACTION_FOLLOW_ACT = "app.calmfeed.FOLLOW_ACT"
 
         /** Mode « instantané » choisi et notifications autorisées ? */
         fun wanted(ctx: Context): Boolean {
@@ -151,6 +220,11 @@ class DmService : Service() {
             if (wanted(ctx)) {
                 try { ctx.startForegroundService(i) } catch (_: Exception) { }
             } else ctx.stopService(i)
+        }
+
+        /** Démarre le service pour une action (réponse, demande d'abonnement…). */
+        fun send(ctx: Context, intent: Intent) {
+            try { ctx.startForegroundService(intent.setClass(ctx, DmService::class.java)) } catch (_: Exception) { }
         }
     }
 }
