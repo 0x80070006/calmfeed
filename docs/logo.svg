@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="CalmFeed">
+  <title>CalmFeed</title>
+  <defs>
+    <!-- Palette chaude inspirée des couleurs d'Instagram, appliquée au seul cadre -->
+    <linearGradient id="dusk" gradientUnits="userSpaceOnUse" x1="116" y1="116" x2="396" y2="396">
+      <stop offset="0" stop-color="#4F5BD5"/>
+      <stop offset=".28" stop-color="#962FBF"/>
+      <stop offset=".55" stop-color="#D62976"/>
+      <stop offset=".8" stop-color="#FA7E1E"/>
+      <stop offset="1" stop-color="#FEDA75"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="#121012"/>
+
+  <!-- Cadre de post, ouvert dans l'angle haut-droit : le fil n'est plus refermé sur lui-même -->
+  <path fill="none" stroke="url(#dusk)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"
+        d="M396 200 V312 A84 84 0 0 1 312 396 H200 A84 84 0 0 1 116 312 V200 A84 84 0 0 1 200 116 H312"/>
+
+  <!-- Croissant de lune : heures calmes, ouvert vers l'ouverture du cadre -->
+  <circle cx="246" cy="266" r="62" fill="#FEDA75"/>
+  <circle cx="274" cy="242" r="52" fill="#121012"/>
+</svg>

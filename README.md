@@ -1,4 +1,6 @@
-# CalmFeed
+<p align="center"><img src="docs/logo.svg" width="128" alt="Logo CalmFeed"></p>
+
+<h1 align="center">CalmFeed</h1>
 
 **Une app Android pour garder Instagram pour ce qu'il a de mieux : parler à ses proches.**
 CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui sert à faire défiler sans fin : Reels, publicités, suggestions, fil infini.
