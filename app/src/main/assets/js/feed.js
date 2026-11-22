@@ -24,16 +24,23 @@
       align-items:center;justify-content:center;text-align:center;padding:24px;
       font:600 14px/1.5 system-ui,sans-serif;color:rgb(var(--ig-secondary-text,106,113,122));
       background:rgb(var(--ig-secondary-background,239,239,239));border-radius:14px;margin:8px 10px;opacity:.75}
-    ${HOME} article[data-cf-veil="limit"]::after{opacity:1;color:rgb(var(--ig-primary-text,12,16,20));font-size:16px}
+    ${HOME} article[data-cf-veil="limit"]::after{display:none}
+    #cf-endcover{position:fixed;left:0;right:0;bottom:0;z-index:5;display:none;flex-direction:column;align-items:center;
+      padding:36px 24px 0;text-align:center;font:15px/1.5 system-ui,sans-serif;
+      background:rgb(var(--ig-primary-background,255,255,255));color:rgb(var(--ig-primary-text,12,16,20));
+      border-top:1px solid rgb(var(--ig-separator,219,223,228))}
+    html[data-cf-page="home"] #cf-endcover.on{display:flex}
+    #cf-endcover .ck{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;margin-bottom:14px;
+      background:rgb(var(--ig-secondary-button-background,239,239,239));color:rgb(var(--ig-secondary-button,38,38,38))}
+    #cf-endcover h3{margin:0 0 6px;font-size:19px}
+    #cf-endcover p{margin:0;max-width:280px;color:rgb(var(--ig-secondary-text,106,113,122))}
     ${HOME} [data-cf-quiet]{visibility:hidden!important}
   `);
 
   const veil = (art, kind) => {
     if (art.getAttribute('data-cf-veil') === kind) return;
     art.setAttribute('data-cf-veil', kind);
-    art.setAttribute('data-cf-label', kind === 'limit'
-      ? `✓  Vous avez vu vos ${C.maxPosts} publications\nLe fil s'arrête ici.`
-      : LABEL[kind] || '');
+    art.setAttribute('data-cf-label', kind === 'limit' ? '' : LABEL[kind] || '');
     for (const v of art.getElementsByTagName('video')) { try { v.pause(); v.muted = true; } catch (_) {} }
     NS.dbg.hidden[kind] = (NS.dbg.hidden[kind] || 0) + 1;
   };
@@ -96,7 +103,13 @@
   const process = (main) => {
     for (const art of main.getElementsByTagName('article')) {
       const key = postKey(art);
-      if (!key) continue;                                   // squelette pas encore rempli
+      if (!key) {
+        // Pas de lien de post : pub (« Ad » + lien publicitaire) ou squelette pas encore rempli.
+        const k = classify(art);
+        if (k !== 'ok') veil(art, k);
+        else if (limitReached) veil(art, 'limit');
+        continue;
+      }
       if (counted.has(key)) {
         // Une pub se déclare parfois après coup : on la voile et on libère sa place dans le compte.
         const k = classify(art);
@@ -113,11 +126,43 @@
       } else veil(art, 'limit');
     }
     limitReached = counted.size >= C.maxPosts;
+    if (limitReached && !raf) raf = requestAnimationFrame(placeCover);
     // Fil terminé : l'indicateur de chargement en bas est rendu invisible (sans changer sa taille).
     if (limitReached) for (const p of main.querySelectorAll('[role="progressbar"]')) {
       if (!p.closest('article') && !p.hasAttribute('data-cf-quiet')) p.setAttribute('data-cf-quiet', '');
     }
   };
+
+  // ------------------------------------------------------------------ calque de fin (fixe, hors liste)
+  // Couvre l'écran depuis le bas de la dernière publication comptée : rien n'est visible en dessous,
+  // et la liste d'Instagram n'est jamais modifiée. Position absolue mémorisée (la publication peut
+  // être démontée quand on défile plus bas).
+  let endAbs = null, cover = null, raf = 0;
+  const lastCounted = (main) => {
+    let last = null;
+    for (const art of main.getElementsByTagName('article')) { const k = postKey(art); if (k && counted.has(k)) last = art; }
+    return last;
+  };
+  function placeCover() {
+    raf = 0;
+    if (!limitReached || NS.pageOf(location.pathname) !== 'home') { if (cover) cover.classList.remove('on'); return; }
+    const main = document.querySelector('main');
+    const last = main && lastCounted(main);
+    if (last) endAbs = last.getBoundingClientRect().bottom + scrollY;
+    if (endAbs == null) return;
+    if (!cover) {
+      cover = document.createElement('div');
+      cover.id = 'cf-endcover';
+      cover.innerHTML = '<div class="ck"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>' +
+        `<h3>Vous avez vu vos ${C.maxPosts} publications</h3><p>Le fil s'arrête ici. Revenez plus tard pour les suivantes.</p>`;
+      document.body.appendChild(cover);
+    }
+    const top = Math.max(0, Math.round(endAbs - scrollY));
+    cover.style.top = top + 'px';
+    cover.classList.toggle('on', top < innerHeight);
+  }
+  addEventListener('scroll', () => { if (limitReached && !raf) raf = requestAnimationFrame(placeCover); }, { passive: true });
 
   // ------------------------------------------------------------------ stories (hors liste : peut être masqué)
   const processStories = (main) => {
