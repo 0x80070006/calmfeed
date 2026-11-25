@@ -643,7 +643,8 @@
     U.state = U.info.state || { s: 'idle' };
     renderUpd(U.state);
     // GitHub n'est contacté qu'ici, à l'ouverture, sauf si une opération est déjà en cours.
-    if (!busyStates.includes(U.state.s)) B.updCheck();
+    // Un état « en cours » sans version (reste d'une installation terminée) ne bloque pas la recherche.
+    if (!busyStates.includes(U.state.s) || !U.state.version) B.updCheck();
   };
   window.closeSub = () => {
     if (!sub.classList.contains('open')) return false;

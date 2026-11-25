@@ -264,7 +264,12 @@ object Updater {
         busy = false
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> emit("installing") { put("confirm", true) }
-            PackageInstaller.STATUS_SUCCESS -> { apk?.delete(); emit("installing") }
+            // Le succès arrive en général dans la nouvelle version déjà relancée : état neutre,
+            // l'écran refait une recherche à l'ouverture et affiche « à jour ».
+            PackageInstaller.STATUS_SUCCESS -> {
+                apk?.delete(); File(ctx.cacheDir, "update.apk").delete()
+                release = null; emit("idle")
+            }
             PackageInstaller.STATUS_FAILURE_ABORTED -> emit("available")
             PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ->
                 fail("La nouvelle version n'est pas signée avec la même clé que celle installée. " +
