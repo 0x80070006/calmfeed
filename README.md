@@ -55,6 +55,11 @@ CalmFeed affiche le site mobile d'Instagram dans une WebView et retire ce qui se
 - Apparence : un fond (Système, Clair, Sombre, Sauge, Sable, Lavande, Nuit bleue, Forêt) et une couleur d'accent (8 choix). Les contrastes sont ajustés automatiquement pour rester lisibles.
 - Taille du texte réglable, compteur de temps passé dans la journée.
 
+**Mises à jour**
+- Réglages › Contenu › **Mises à jour** : affiche la version installée et cherche la dernière release GitHub (option « Versions bêta » pour les pré-versions). GitHub n'est contacté que quand cet écran est ouvert.
+- « Mettre à jour » télécharge `CalmFeed.apk`, vérifie son SHA-256 avec `SHA256SUMS.txt` de la même release, puis l'installe. Après la mise à jour, une notification « CalmFeed est à jour » rouvre l'app.
+- Appui long sur l'icône : raccourci direct vers les réglages.
+
 ## Discrétion vis-à-vis d'Instagram
 
 L'app est conçue pour ne pas ressembler à un robot :
@@ -96,6 +101,15 @@ puis :
 ./gradlew assembleRelease
 ```
 
+### Publier une release
+
+1. Incrémentez `bundle.version` dans `gradle.properties` (le `versionCode` en est dérivé).
+2. `./gradlew assembleRelease`, toujours avec la même clé de signature : sinon Android refuse la mise à jour.
+3. Copiez l'APK sous le nom **`CalmFeed.apk`** et générez les empreintes : `sha256sum *.apk > SHA256SUMS.txt`.
+4. Joignez `CalmFeed.apk` et `SHA256SUMS.txt` à la release GitHub (tag `vX.Y.Z`, cochez « pre-release » pour une bêta).
+
+Pour tester la mise à jour, installez une build plus ancienne signée avec la même clé : `./gradlew assembleRelease -Pbundle.version=0.0.99`.
+
 ## Structure
 
 ```
@@ -115,7 +129,8 @@ app/src/main/
   assets/settings.html      écran de réglages (local, sans réseau)
   assets/themes.json        fonds et couleurs d'accent
   java/app/calmfeed/        MainActivity (onglets natifs), SettingsActivity, Prefs, Themes,
-                            Notifier, ReplyReceiver, InboxWorker, DmService, ScriptLib
+                            Notifier, ReplyReceiver, InboxWorker, DmService, ScriptLib,
+                            Updater, InstallReceiver, UpdatedReceiver (mise à jour intégrée)
 ```
 
 Pour le débogage, la build debug permet d'inspecter la page via `chrome://inspect` ; tapez `window.__cfDebug` dans la console.

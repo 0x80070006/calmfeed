@@ -720,6 +720,11 @@ class MainActivity : Activity() {
 
     /** Notification touchée : ouvre la conversation (par identifiant exact si connu). */
     private fun handleNotificationIntent(intent: Intent?) {
+        if (intent?.action == ACTION_OPEN_SETTINGS) {
+            intent.action = Intent.ACTION_MAIN
+            startActivity(Intent(this, SettingsActivity::class.java))
+            return
+        }
         val ref = intent?.getStringExtra(Notifier.EXTRA_OPEN) ?: return
         intent.removeExtra(Notifier.EXTRA_OPEN)
         if (webs["direct"] == null) createWeb("direct").loadUrl(urlFor("direct")!!)
@@ -831,6 +836,8 @@ class MainActivity : Activity() {
 
     companion object {
         const val IG = ScriptLib.IG
+        /** Raccourci « Réglages » (appui long sur l'icône). */
+        const val ACTION_OPEN_SETTINGS = "app.calmfeed.OPEN_SETTINGS"
         /** Instance vivante (pour répondre depuis une notification sans ouvrir l'app). */
         @Volatile var live: java.lang.ref.WeakReference<MainActivity>? = null
         private const val REQ_FILE = 41

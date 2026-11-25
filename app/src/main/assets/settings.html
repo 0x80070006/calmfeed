@@ -6,7 +6,7 @@
 <title>Réglages</title>
 <style>
   :root{
-    --bg:#ffffff; --bg2:#f2f2f4; --card:#ffffff; --text:#0c1014; --text2:#6b7178; --sep:#e3e5e8;
+    --bg:#ffffff; --bg2:#f2f2f4; --card:#ffffff; --text:#0c1014; --text2:#5f656c; --sep:#e3e5e8;
     --accent:#4a5df9; --accentText:#fff; --radius:16px;
     color-scheme: light;
   }
@@ -114,6 +114,32 @@
   .sample .bubble{display:inline-block;max-width:85%;padding:9px 13px;border-radius:18px;background:var(--bg2);color:var(--text);transition:font-size .15s}
 
   .note{margin:20px 6px 0;font-size:12.5px;color:var(--text2);text-align:center}
+
+  /* sous-page « Mises à jour » */
+  .linkrow{width:100%;border:0;background:none;text-align:left}
+  .linkrow:active{background:var(--sep)}
+  .chev{color:var(--text2);flex:none}
+  .sub{position:fixed;inset:0;z-index:20;background:var(--bg2);overflow-y:auto;visibility:hidden;
+    transform:translateX(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility 0s linear .28s}
+  .sub.open{visibility:visible;transform:none;transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  .sub main{padding-top:8px}
+  .upd{padding:18px 16px}
+  .upd .big{font-size:19px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .upd .sm{font-size:13.5px;color:var(--text2);margin-top:4px;line-height:1.45}
+  .badge{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:6px;
+    background:color-mix(in srgb, var(--accent) 16%, var(--card));color:var(--accent)}
+  .notes{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--bg2);font-size:13px;line-height:1.45;
+    color:var(--text2);white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+  .primary{display:block;width:100%;height:46px;margin-top:14px;border:0;border-radius:12px;font-weight:600;font-size:15px;
+    background:var(--accent);color:var(--accentText)}
+  .primary:active{opacity:.8}
+  .primary:disabled{opacity:.5}
+  .ghost{display:block;margin:10px auto 0;border:0;background:none;color:var(--accent);font-weight:600;font-size:14px;padding:8px 12px;border-radius:10px}
+  .bar{height:6px;border-radius:3px;background:var(--sep);overflow:hidden;margin-top:14px}
+  .bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px;transition:width .2s}
+  .spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--sep);border-top-color:var(--accent);animation:sp .8s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.sub,.sub.open{transition:none}.spin{animation-duration:2s}}
 </style>
 </head>
 <body>
@@ -174,6 +200,14 @@
 
     <h2>Divers</h2>
     <div class="card" id="miscToggles"></div>
+
+    <h2>Application</h2>
+    <div class="card">
+      <button class="row linkrow" id="openUpd">
+        <div class="txt"><div class="t">Mises à jour</div><div class="d" id="updSub">Version installée</div></div>
+        <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
 
     <button class="reset" id="reset">Rétablir les réglages par défaut</button>
     <p class="note">Les changements de contenu sont appliqués en revenant à l'app (la page est rechargée une fois).</p>
@@ -237,6 +271,32 @@
     <p class="note">Les couleurs s'appliquent sans recharger Instagram. Les contrastes sont ajustés automatiquement pour rester lisibles.</p>
   </section>
 </main>
+
+<!-- =============================== MISES À JOUR (sous-page) =============================== -->
+<div class="sub" id="sub" aria-hidden="true">
+  <header>
+    <div class="top">
+      <button class="back" id="subBack" aria-label="Retour aux réglages">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1>Mises à jour</h1>
+    </div>
+  </header>
+  <main>
+    <div class="card upd" id="updBox" aria-live="polite"></div>
+
+    <h2>Options</h2>
+    <div class="card">
+      <label class="row">
+        <div class="txt"><div class="t">Versions bêta</div>
+          <div class="d">Propose aussi les pré-versions : nouveautés plus tôt, parfois moins stables.</div></div>
+        <input type="checkbox" class="sw" id="updBeta">
+      </label>
+    </div>
+    <p class="note">CalmFeed ne contacte GitHub que lorsque vous ouvrez cet écran. Chaque version est vérifiée
+      (empreinte SHA-256) avant d’être installée.</p>
+  </main>
+</div>
 
 <script>
 (() => {
@@ -446,7 +506,7 @@
     syncBatch();
   });
   const syncToggles = () => {
-    document.querySelectorAll('input.sw').forEach(i => { i.checked = !!S.cfg[i.dataset.k]; });
+    document.querySelectorAll('input.sw[data-k]').forEach(i => { i.checked = !!S.cfg[i.dataset.k]; });
     syncDeps();
   };
 
@@ -522,6 +582,80 @@
     syncZoom();
     paint();
   };
+
+  // ---------------------------------------------------------- mises à jour
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const U = { info: B.updInfo ? JSON.parse(B.updInfo()) : null, state: null };
+  const sub = $('#sub'), box = $('#updBox');
+  if (U.info) $('#updSub').textContent = 'Version ' + U.info.installed + ' installée';
+  const verLine = (st) => `${esc(st.version)}${st.beta ? ' <span class="badge">bêta</span>' : ''}`;
+  const renderUpd = (st) => {
+    const inst = esc(U.info.installed);
+    switch (st.s) {
+      case 'checking':
+        box.innerHTML = `<div class="big"><span class="spin"></span>Recherche de la dernière version…</div>
+          <div class="sm">Version installée : ${inst}</div>`; break;
+      case 'uptodate':
+        box.innerHTML = `<div class="big">L’app est à jour</div>
+          <div class="sm">Version installée : ${inst} · dernière publiée : ${verLine(st)}</div>
+          <button class="ghost" data-a="check">Vérifier à nouveau</button>`; break;
+      case 'available':
+        box.innerHTML = `<div class="big">Version ${verLine(st)} disponible</div>
+          <div class="sm">Version installée : ${inst}</div>
+          ${st.notes ? `<div class="notes">${esc(st.notes)}</div>` : ''}
+          <button class="primary" data-a="start">Mettre à jour</button>`; break;
+      case 'downloading':
+        box.innerHTML = `<div class="big">Téléchargement… ${st.pct | 0} %</div>
+          <div class="sm">Version ${verLine(st)}</div>
+          <div class="bar"><i style="width:${st.pct | 0}%"></i></div>`; break;
+      case 'permission':
+        box.innerHTML = `<div class="big">Autorisation requise</div>
+          <div class="sm">Android doit autoriser CalmFeed à installer ses propres mises à jour. Activez
+            « Autoriser cette source », puis revenez ici : l’installation reprendra toute seule.</div>
+          <button class="primary" data-a="grant">Ouvrir les réglages Android</button>`; break;
+      case 'installing':
+        box.innerHTML = `<div class="big"><span class="spin"></span>Installation de la version ${verLine(st)}</div>
+          <div class="sm">${st.confirm ? 'Confirmez l’installation dans la fenêtre d’Android. ' : ''}CalmFeed va se fermer
+            pendant la mise à jour. Une notification « CalmFeed est à jour » vous permettra de le rouvrir.</div>`; break;
+      case 'error':
+        box.innerHTML = `<div class="big">La mise à jour n’a pas abouti</div>
+          <div class="warn" style="margin:10px 0 0">${esc(st.msg)}</div>
+          <button class="ghost" data-a="check">Réessayer</button>`; break;
+      default:
+        box.innerHTML = `<div class="big">Version installée : ${inst}</div>
+          <button class="ghost" data-a="check">Rechercher une mise à jour</button>`;
+    }
+  };
+  window.onUpdate = (st) => { U.state = st; renderUpd(st); };
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-a]');
+    if (!b) return;
+    if (b.dataset.a === 'check') B.updCheck();
+    else if (b.dataset.a === 'start') { b.disabled = true; B.updStart(); }
+    else if (b.dataset.a === 'grant') B.updGrant();
+  });
+  const busyStates = ['checking', 'downloading', 'installing', 'permission'];
+  const openSub = () => {
+    if (!U.info) return;
+    U.info = JSON.parse(B.updInfo());
+    $('#updBeta').checked = !!U.info.beta;
+    sub.classList.add('open'); sub.setAttribute('aria-hidden', 'false');
+    U.state = U.info.state || { s: 'idle' };
+    renderUpd(U.state);
+    // GitHub n'est contacté qu'ici, à l'ouverture, sauf si une opération est déjà en cours.
+    if (!busyStates.includes(U.state.s)) B.updCheck();
+  };
+  window.closeSub = () => {
+    if (!sub.classList.contains('open')) return false;
+    sub.classList.remove('open'); sub.setAttribute('aria-hidden', 'true');
+    return true;
+  };
+  $('#openUpd').addEventListener('click', openSub);
+  $('#subBack').addEventListener('click', () => window.closeSub());
+  $('#updBeta').addEventListener('change', (e) => {
+    B.updSetBeta(e.target.checked);
+    if (!busyStates.includes((U.state || {}).s)) B.updCheck();
+  });
 
   const m = S.usageMin;
   $('#usage').textContent = m < 1 ? "Aujourd'hui : moins d'une minute sur Instagram" : `Aujourd'hui : ${m} min sur Instagram`;

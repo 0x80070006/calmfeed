@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Appui long sur l'icône : accès direct aux réglages (utile aussi avant de se connecter). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/settings">
+        <intent
+            android:action="app.calmfeed.OPEN_SETTINGS"
+            android:targetPackage="app.calmfeed"
+            android:targetClass="app.calmfeed.MainActivity" />
+    </shortcut>
+</shortcuts>

@@ -12,6 +12,14 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Version de release : bundle.version (gradle.properties, ou -Pbundle.version=…).
+// Injectée dans le manifeste (meta-data release.version), lue par la mise à jour intégrée.
+val releaseVersion = (findProperty("bundle.version") as String?)?.trim().orEmpty().ifEmpty { "0.0.0" }
+// versionCode croissant dérivé de la version : 0.7.0 → 7000, 1.2.3 → 1002003 (suffixe -beta ignoré).
+val releaseCode = releaseVersion.substringBefore('-').split('.')
+    .map { it.toIntOrNull() ?: 0 }.let { n -> n.getOrElse(0) { 0 } * 1_000_000 + n.getOrElse(1) { 0 } * 1_000 + n.getOrElse(2) { 0 } }
+    .coerceAtLeast(1)
+
 android {
     namespace = "app.calmfeed"
     compileSdk = 36
@@ -20,8 +28,9 @@ android {
         applicationId = "app.calmfeed"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.6.0"
+        versionCode = releaseCode
+        versionName = releaseVersion
+        manifestPlaceholders["releaseVersion"] = releaseVersion
     }
 
     signingConfigs {

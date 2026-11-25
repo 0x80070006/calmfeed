@@ -15,7 +15,8 @@ import android.webkit.WebViewClient
 
 /**
  * Écran de réglages : page locale (assets/settings.html) dans une WebView isolée.
- * Aucune requête réseau ; la page parle à l'app via le pont CalmBridge.
+ * La page elle-même ne charge rien du réseau ; elle parle à l'app via le pont CalmBridge.
+ * Seul l'écran « Mises à jour » contacte GitHub (Updater), et uniquement quand il est ouvert.
  */
 class SettingsActivity : Activity() {
 
@@ -53,6 +54,29 @@ class SettingsActivity : Activity() {
         applyChrome()
         setContentView(frame)
         web.loadUrl("file:///android_asset/settings.html")
+        Updater.listener = { st -> pushUpdate(st) }
+        if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { goBack() }
+    }
+
+    // ------------------------------------------------------------------ mise à jour
+
+    private fun pushUpdate(st: org.json.JSONObject) {
+        if (::web.isInitialized) web.evaluateJavascript("window.onUpdate&&window.onUpdate($st)", null)
+    }
+
+    /** Après le téléchargement vérifié : autorisations, puis session d'installation. */
+    private fun proceedInstall() {
+        if (!Updater.hasApk()) return
+        if (!Updater.canInstallPackages(this)) { Updater.needPermission(); return }
+        if (Build.VERSION.SDK_INT >= 33 && !Updater.askedNotif(this) &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            // Pour la notification « CalmFeed est à jour » : demandée une fois, on continue même si refusée.
+            Updater.markAskedNotif(this)
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQ_UPDATE_NOTIF)
+            return
+        }
+        Updater.install(this)
     }
 
     private fun applyChrome() {
@@ -81,15 +105,27 @@ class SettingsActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
+        if (code == REQ_UPDATE_NOTIF) { Updater.install(this); return }
         web.evaluateJavascript("window.onNotifPermission&&window.onNotifPermission()", null)
     }
 
     override fun onResume() {
         super.onResume()
         if (::web.isInitialized) web.evaluateJavascript("window.onNotifPermission&&window.onNotifPermission()", null)
+        // Retour des réglages « Installer des applis inconnues » : l'installation reprend seule.
+        if (Updater.state.optString("s") == "permission" && Updater.canInstallPackages(this)) proceedInstall()
     }
 
+    /** Retour : referme d'abord la sous-page « Mises à jour » si elle est ouverte. */
+    private fun goBack() {
+        web.evaluateJavascript("window.closeSub?window.closeSub():false") { r -> if (r != "true") finish() }
+    }
+
+    @Deprecated("Android 12 et moins ; Android 13+ passe par OnBackInvokedCallback.")
+    override fun onBackPressed() = goBack()
+
     override fun onDestroy() {
+        if (Updater.listener != null) Updater.listener = null
         web.destroy()
         super.onDestroy()
     }
@@ -147,5 +183,36 @@ class SettingsActivity : Activity() {
 
         @JavascriptInterface
         fun close() = runOnUiThread { finish() }
+
+        // ---- mises à jour ----
+
+        /** Version installée, option bêta, dernier état connu. */
+        @JavascriptInterface
+        fun updInfo(): String = org.json.JSONObject()
+            .put("installed", Updater.installedVersion(applicationContext))
+            .put("beta", Updater.beta(applicationContext))
+            .put("state", Updater.state)
+            .toString()
+
+        @JavascriptInterface
+        fun updCheck() = Updater.check(applicationContext)
+
+        @JavascriptInterface
+        fun updSetBeta(on: Boolean) = Updater.setBeta(applicationContext, on)
+
+        @JavascriptInterface
+        fun updStart() = runOnUiThread {
+            if (Updater.hasApk()) proceedInstall()
+            else Updater.download(applicationContext) { proceedInstall() }
+        }
+
+        /** Ouvre « Installer des applis inconnues » pour CalmFeed ; l'installation reprend au retour. */
+        @JavascriptInterface
+        fun updGrant() = runOnUiThread {
+            startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                android.net.Uri.parse("package:$packageName")))
+        }
     }
+
+    companion object { private const val REQ_UPDATE_NOTIF = 8 }
 }

@@ -12,6 +12,10 @@
     <!-- Connexion temps réel aux messages en arrière-plan (notifications instantanées) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Mise à jour intégrée depuis les releases GitHub (Réglages › Mises à jour) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Sans elle, Android redemande confirmation à chaque mise à jour, même quand l'app est son propre installateur -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -34,6 +38,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <receiver
@@ -42,6 +49,21 @@
         <receiver
             android:name=".ActionReceiver"
             android:exported="false" />
+        <receiver
+            android:name=".InstallReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".UpdatedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Version de release (bundle.version), comparée au tag GitHub -->
+        <meta-data
+            android:name="release.version"
+            android:value="${releaseVersion}" />
 
         <service
             android:name=".DmService"
